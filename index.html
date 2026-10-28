@@ -402,6 +402,16 @@
                 font-size: 16px;
             }
         }
+        /* 平板端适配：歌词条自动占屏幕约70%宽 */
+        @media (min-width: 601px) and (max-width: 1366px) and (pointer: coarse){
+            .audio-panel.lyric-bar-mode{
+                width: 70vw;
+                max-width: 900px;
+            }
+            .audio-panel.lyric-bar-mode .single-lyric-text{
+                font-size: 22px;
+            }
+        }
         /* 单句歌词显示区域（默认隐藏，长条模式才显示） */
         .single-lyric-text{
             display:none;
