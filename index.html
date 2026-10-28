@@ -606,9 +606,11 @@
         ];
 
         const songList = [
-            {filePath:"bg1.mp3", showName:"歌曲1", lrcPath:"bg1.lrc"},
-            {filePath:"bg2.mp3", showName:"歌曲2", lrcPath:"bg2.lrc"},
-            {filePath:"bg3.mp3", showName:"歌曲3", lrcPath:"bg3.lrc"}
+            // lrcOffset: 歌词偏移秒数（正数=提前，负数=延后）
+            // lrcScale: 歌词时间轴缩放（校准前半段/后半段快慢漂移）
+            {filePath:"bg1.mp3", showName:"歌曲1", lrcPath:"bg1.lrc", lrcOffset:0.5, lrcScale:1},
+            {filePath:"bg2.mp3", showName:"歌曲2", lrcPath:"bg2.lrc", lrcOffset:-1.3, lrcScale:1.02},
+            {filePath:"bg3.mp3", showName:"歌曲3", lrcPath:"bg3.lrc", lrcOffset:0.5, lrcScale:1}
         ];
 
         let currentSongIndex = 0;
@@ -798,11 +800,12 @@
                 singleLyricDom.innerText = "歌词加载失败";
             }
         }
-        // 歌词提前量（秒）：让歌词比歌曲时间轴稍微提前出现
-        const LYRIC_ADVANCE = 0.5;
+        // 歌词校准：按歌曲独立生效（在 loadSong 中切换）
+        let activeLrcOffset = 0.5;
+        let activeLrcScale = 1;
         function updateSingleLyric(currentTime){
             if(lyricLines.length===0) return;
-            const t = currentTime + LYRIC_ADVANCE;
+            const t = currentTime * activeLrcScale + activeLrcOffset;
             let activeIndex = 0;
             for(let i=0;i<lyricLines.length;i++){
                 if(t >= lyricLines[i].time){
@@ -921,6 +924,8 @@
 
         function loadSong(index){
             const song = songList[index];
+            activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : 0.5;
+            activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : 1;
             music.src = "music/" + song.filePath;
             loadLyric(song.lrcPath);
         }
