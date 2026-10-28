@@ -22,6 +22,11 @@
             body{
                 padding-top: 80px;
             }
+            /* 放大缩放手柄，方便手指点按 */
+            .resize-handle{
+                width: 26px;
+                height: 26px;
+            }
         }
         /* ========== 淡粉梦幻星空渐变背景 ========== */
         .starry-bg {
@@ -327,6 +332,7 @@
             transition: all 0.4s ease;
             cursor:move;
             user-select:none;
+            touch-action:none;
         }
         /*右下角缩放手柄*/
         .resize-handle{
@@ -828,7 +834,7 @@
             }))
         }
 
-        audioPanel.addEventListener("mousedown",(e)=>{
+        audioPanel.addEventListener("pointerdown",(e)=>{
             if(e.target.closest(".audio-icon") || e.target===resizeHandle) return;
             isDragMove = true;
             dragOffsetX = e.clientX - audioPanel.offsetLeft;
@@ -836,7 +842,7 @@
             audioPanel.style.right = "auto";
         })
 
-        resizeHandle.addEventListener("mousedown",(e)=>{
+        resizeHandle.addEventListener("pointerdown",(e)=>{
             e.stopPropagation();
             isResize = true;
             resizeStartX = e.clientX;
@@ -845,7 +851,7 @@
             resizeStartH = audioPanel.offsetHeight;
         })
 
-        document.addEventListener("mousemove",(e)=>{
+        document.addEventListener("pointermove",(e)=>{
             if(isDragMove){
                 let x = e.clientX - dragOffsetX;
                 let y = e.clientY - dragOffsetY;
@@ -868,7 +874,7 @@
             }
         })
 
-        document.addEventListener("mouseup",()=>{
+        document.addEventListener("pointerup",()=>{
             if(isDragMove||isResize){
                 isDragMove = false;
                 isResize = false;
