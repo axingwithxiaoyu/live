@@ -342,11 +342,12 @@
         /* 重置按钮（右上角） */
         .reset-icon{
             position:absolute;
-            top:6px;
-            right:8px;
-            width:22px;
-            height:22px;
-            font-size:12px;
+            top:1px;
+            right:1px;
+            width:16px;
+            height:16px;
+            font-size:9px;
+            border-radius:50%;
             opacity:0;
             background:#fff;
             transition: opacity 0.2s ease;
@@ -771,11 +772,14 @@
                 singleLyricDom.innerText = "歌词加载失败";
             }
         }
+        // 歌词提前量（秒）：让歌词比歌曲时间轴稍微提前出现
+        const LYRIC_ADVANCE = 0.5;
         function updateSingleLyric(currentTime){
             if(lyricLines.length===0) return;
+            const t = currentTime + LYRIC_ADVANCE;
             let activeIndex = 0;
             for(let i=0;i<lyricLines.length;i++){
-                if(currentTime >= lyricLines[i].time){
+                if(t >= lyricLines[i].time){
                     activeIndex = i;
                 }else break;
             }
