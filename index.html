@@ -727,17 +727,27 @@
         renderGallery(currentFilter);
         renderAllNotes();
 
-        document.addEventListener('mousemove',(e)=>{
+        // 爱心跟随特效（鼠标 + 触摸）
+        function spawnHeart(x,y){
             if(Math.random()>0.85){
                 const heart = document.createElement('div');
                 heart.className = "heart-follow";
                 heart.innerText = "♥";
-                heart.style.left = e.clientX + "px";
-                heart.style.top = e.clientY + "px";
+                heart.style.left = x + "px";
+                heart.style.top = y + "px";
                 document.body.appendChild(heart);
                 setTimeout(()=>heart.remove(),1200);
             }
-        })
+        }
+        document.addEventListener('mousemove',(e)=>spawnHeart(e.clientX,e.clientY));
+        document.addEventListener('touchstart',(e)=>{
+            const t = e.touches[0];
+            if(t) spawnHeart(t.clientX,t.clientY);
+        },{passive:true});
+        document.addEventListener('touchmove',(e)=>{
+            const t = e.touches[0];
+            if(t) spawnHeart(t.clientX,t.clientY);
+        },{passive:true})
 
         //解析LRC
         function parseLrc(text){
