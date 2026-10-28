@@ -605,6 +605,10 @@
             { cls:"note-4", content:"期待我们更多的未来故事✨" }
         ];
 
+        // 腾讯云COS音乐加速源：填桶的访问域名，如 "https://xxx-125xxxxxxx.cos.ap-guangzhou.myqcloud.com"
+        // 留空 = 直接用仓库 music/ 目录；COS加载失败会自动回退本地
+        const MUSIC_CDN_BASE = "";
+
         const songList = [
             // lrcOffset: 歌词偏移秒数（正数=提前，负数=延后）
             // lrcScale: 歌词时间轴缩放（校准快慢漂移）
@@ -616,6 +620,7 @@
         ];
 
         let currentSongIndex = 0;
+        let currentMusicSrc = "";
         let currentFilter = "all";
         let userNotes = JSON.parse(localStorage.getItem("loveNotes")) || [];
 
@@ -946,10 +951,22 @@
             activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : 0.5;
             activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : 1;
             activeLrcCalib = Array.isArray(song.lrcCalib) ? song.lrcCalib : null;
-            music.src = "music/" + song.filePath;
+            currentMusicSrc = MUSIC_CDN_BASE ? (MUSIC_CDN_BASE + "/" + song.filePath) : ("music/" + song.filePath);
+            music.src = currentMusicSrc;
             loadLyric(song.lrcPath);
         }
         loadSong(currentSongIndex);
+
+        // COS加速源加载失败时，自动回退到仓库本地音乐
+        music.addEventListener("error", function(){
+            const song = songList[currentSongIndex];
+            if(!song) return;
+            const localSrc = "music/" + song.filePath;
+            if(currentMusicSrc !== localSrc){
+                currentMusicSrc = localSrc;
+                music.src = localSrc;
+            }
+        });
 
         musicBtn.onclick = ()=>{
             if(music.paused){
