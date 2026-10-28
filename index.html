@@ -247,6 +247,29 @@
             resize:vertical;
             font-size:15px;
         }
+        #noteName{
+            width:100%;
+            padding:10px 12px;
+            margin-bottom:10px;
+            border:1px solid #ffd6e4;
+            border-radius:8px;
+            font-size:14px;
+            box-sizing:border-box;
+            outline:none;
+        }
+        .note-from{
+            font-size:12px;
+            color:#b0748c;
+            text-align:right;
+            margin-top:6px;
+            opacity:0.75;
+        }
+        .note-mode-tip{
+            margin-top:10px;
+            font-size:12px;
+            color:#c2889f;
+            text-align:center;
+        }
         .note-btn-row{
             margin-top:12px;
             text-align:right;
@@ -528,10 +551,12 @@
         <section class="note-wall">
             <h2 class="block-title">💛 留言墙</h2>
             <div class="note-input-area">
-                <textarea id="noteTextarea" placeholder="在这里写下你的悄悄话，提交生成便签（仅保存在本机浏览器）"></textarea>
+                <input id="noteName" type="text" maxlength="20" placeholder="你的名字（可留空）">
+                <textarea id="noteTextarea" placeholder="写下你想对TA说的话…"></textarea>
                 <div class="note-btn-row">
-                    <button id="addNoteBtn">添加便签</button>
+                    <button id="addNoteBtn">添加留言</button>
                 </div>
+                <div id="noteModeTip" class="note-mode-tip">留言服务连接中…</div>
             </div>
             <div class="note-container" id="noteBox"></div>
         </section>
@@ -624,6 +649,13 @@
         let currentFilter = "all";
         let userNotes = JSON.parse(localStorage.getItem("loveNotes")) || [];
 
+        // ========== 共享留言（EdgeOne 边缘函数 + KV）==========
+        let serverNotes = [];   // 服务器上的共享留言
+        let serverMode = false; // true = 已连接共享留言接口
+        function escHtml(s){
+            return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+        }
+
         //歌词全局
         let lyricLines = [];
         const audioPanel = document.getElementById("audioPanel");
@@ -655,39 +687,97 @@
             staticNoteData.forEach(n=>{
                 const div = document.createElement("div");
                 div.className = "note " + n.cls;
-                div.innerHTML = `<div class="note-text">${n.content}</div>`;
+                div.innerHTML = `<div class="note-text">${escHtml(n.content)}</div>`;
                 noteBox.appendChild(div);
             });
-            userNotes.forEach((item,idx)=>{
-                const div = document.createElement("div");
-                div.className = "note " + item.cls;
-                div.innerHTML = `
-                    <span class="note-del" data-idx="${idx}">✕</span>
-                    <div class="note-text">${item.content}</div>
-                `;
-                noteBox.appendChild(div);
-            })
-            document.querySelectorAll(".note-del").forEach(el=>{
-                el.onclick = function(e){
-                    e.stopPropagation();
-                    const i = Number(this.dataset.idx);
-                    userNotes.splice(i,1);
-                    saveUserNotes();
-                    renderAllNotes();
-                }
-            })
+            if(serverMode){
+                const clsList = ["note-1","note-2","note-3","note-4"];
+                serverNotes.forEach(item=>{
+                    const div = document.createElement("div");
+                    const seed = String(item.id || "");
+                    let h = 0;
+                    for(let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i)) % 997;
+                    div.className = "note " + clsList[h % clsList.length];
+                    div.innerHTML = `
+                        <div class="note-text">${escHtml(item.text)}</div>
+                        <div class="note-from">—— ${escHtml(item.name || "匿名")}</div>
+                    `;
+                    noteBox.appendChild(div);
+                });
+            } else {
+                userNotes.forEach((item,idx)=>{
+                    const div = document.createElement("div");
+                    div.className = "note " + item.cls;
+                    div.innerHTML = `
+                        <span class="note-del" data-idx="${idx}">✕</span>
+                        <div class="note-text">${escHtml(item.content)}</div>
+                    `;
+                    noteBox.appendChild(div);
+                })
+                document.querySelectorAll(".note-del").forEach(el=>{
+                    el.onclick = function(e){
+                        e.stopPropagation();
+                        const i = Number(this.dataset.idx);
+                        userNotes.splice(i,1);
+                        saveUserNotes();
+                        renderAllNotes();
+                    }
+                })
+            }
         }
-        document.getElementById("addNoteBtn").onclick = function(){
+        document.getElementById("addNoteBtn").onclick = async function(){
             const textarea = document.getElementById("noteTextarea");
+            const nameInput = document.getElementById("noteName");
             const txt = textarea.value.trim();
             if(!txt) return;
+            if(txt.length > 200){ alert("留言最多200字哦"); return; }
+            const btn = this;
+            btn.disabled = true;
+            if(serverMode){
+                try{
+                    const res = await fetch("api/notes", {
+                        method: "POST",
+                        headers: {"content-type": "application/json"},
+                        body: JSON.stringify({ name: (nameInput.value || "").trim(), text: txt })
+                    });
+                    const data = await res.json();
+                    if(res.ok && data.ok && data.note){
+                        serverNotes.unshift(data.note);
+                        renderAllNotes();
+                        textarea.value = "";
+                        btn.disabled = false;
+                        return;
+                    }
+                }catch(e){ /* 接口异常时回退本地保存 */ }
+            }
             const clsList = ["note-1","note-2","note-3","note-4"];
             const randomCls = clsList[Math.floor(Math.random()*clsList.length)];
             userNotes.push({cls:randomCls, content:txt});
             saveUserNotes();
             renderAllNotes();
             textarea.value = "";
+            btn.disabled = false;
         }
+
+        // 启动时尝试连接共享留言服务（EdgeOne 环境生效，静态托管自动回退本地模式）
+        (async function loadServerNotes(){
+            const tip = document.getElementById("noteModeTip");
+            try{
+                const res = await fetch("api/notes");
+                if(!res.ok) throw new Error("bad status");
+                const data = await res.json();
+                if(data && data.ok && Array.isArray(data.notes)){
+                    serverNotes = data.notes;
+                    serverMode = true;
+                    if(tip) tip.textContent = "💬 共享留言模式：TA 也能看到你写的留言";
+                    renderAllNotes();
+                    return;
+                }
+                throw new Error("bad payload");
+            }catch(e){
+                if(tip) tip.textContent = "当前为本地留言模式（仅本机可见）";
+            }
+        })();
         // ========== 修复天数计算 ==========
         function calcDay() {
             const start = new Date(startYear, startMonth - 1, startDay);
