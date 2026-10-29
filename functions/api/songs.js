@@ -57,9 +57,33 @@ export async function onRequest({ request }){
                 data = await store.get("song/" + fileId + ".mp3", { type: "arrayBuffer", consistency: "strong" });
             }catch(e){ return json({ ok: false, error: "BLOB_GET_FAIL" }, 500); }
             if(data === null) return json({ ok: false, error: "NOT_FOUND" }, 404);
-            return new Response(data, {
-                headers: { "content-type": "audio/mpeg", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" }
-            });
+            const total = data.byteLength;
+            const baseHeaders = {
+                "content-type": "audio/mpeg",
+                "accept-ranges": "bytes",
+                "cache-control": "public, max-age=86400",
+                "access-control-allow-origin": "*"
+            };
+            // 边缘函数响应体同样受限（约1MB）：支持 Range 分段返回，每段最大 900KB，浏览器播放器会自动续段
+            const range = request.headers.get("range");
+            const m = range ? /bytes=(\d*)-(\d*)/.exec(range) : null;
+            if(m){
+                let start = m[1] ? parseInt(m[1], 10) : 0;
+                let end = m[2] ? parseInt(m[2], 10) : total - 1;
+                if(!(start >= 0) || start >= total){
+                    return new Response(null, { status: 416, headers: { "content-range": "bytes */" + total } });
+                }
+                if(!(end >= start) || end >= total) end = total - 1;
+                const MAXCHUNK = 900 * 1024;
+                if(end - start + 1 > MAXCHUNK) end = start + MAXCHUNK - 1;
+                return new Response(data.slice(start, end + 1), {
+                    status: 206,
+                    headers: Object.assign({}, baseHeaders, {
+                        "content-range": "bytes " + start + "-" + end + "/" + total
+                    })
+                });
+            }
+            return new Response(data, { headers: baseHeaders });
         }
         if(lrcId){
             let data;
@@ -108,6 +132,17 @@ export async function onRequest({ request }){
             const meta = { id: id, name: rawName.slice(0, 50), hasLrc: hasLrc, ts: Date.now() };
             try{ await store.set("meta/song/" + id, JSON.stringify(meta)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
             return json({ ok: true, song: meta });
+        }
+        // mode=del：删除歌曲（音频 + 歌词 + 元数据）
+        if(mode === "del"){
+            let body = null;
+            try{ body = await request.json(); }catch(e){}
+            const id = String((body && body.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            try{ await store.delete("song/" + id + ".mp3"); }catch(e){}
+            try{ await store.delete("song/" + id + ".lrc"); }catch(e){}
+            try{ await store.delete("meta/song/" + id); }catch(e){}
+            return json({ ok: true });
         }
         // 兼容：≤1MB 小文件的旧直传（multipart）
         let form;

@@ -104,6 +104,16 @@ export async function onRequest({ request }){
             try{ await store.set("meta/photo/" + id, JSON.stringify(meta)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
             return json({ ok: true, saved: meta });
         }
+        // mode=del：删除照片（图片 + 元数据）
+        if(mode === "del"){
+            let body = null;
+            try{ body = await request.json(); }catch(e){}
+            const id = String((body && body.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            try{ await store.delete("photo/" + id); }catch(e){}
+            try{ await store.delete("meta/photo/" + id); }catch(e){}
+            return json({ ok: true });
+        }
         // 兼容：≤1MB 小文件的旧直传（multipart）
         let form;
         try{ form = await request.formData(); }catch(e){ return json({ ok: false, error: "BAD_FORM" }, 400); }
