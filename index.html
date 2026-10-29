@@ -562,6 +562,13 @@
         .audio-panel.lyric-bar-mode.one-line .lyric-prev{
             display:none;
         }
+        /* 第三行歌词：默认隐藏，拖高到 110px 以上自动出现 */
+        .lyric-next2{
+            display:none;
+        }
+        .audio-panel.lyric-bar-mode.three-line .lyric-next2{
+            display:block;
+        }
         /* 歌词切换时的上滑滚动动画 */
         .audio-panel.lyric-bar-mode .single-lyric-text.slide .lyric-line{
             animation: lyricSlide .35s ease;
@@ -813,10 +820,11 @@
             <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.7">
             <button class="audio-icon" id="lyricToggleBtn" title="切换桌面歌词模式">词</button>
         </div>
-        <!-- 歌词条模式的两行歌词显示区 -->
+        <!-- 歌词条模式的多行歌词显示区（1~3行随高度自适应） -->
         <div class="single-lyric-text" id="singleLyric">
             <div class="lyric-line lyric-prev" id="lyricPrev"></div>
             <div class="lyric-line lyric-cur" id="lyricCur">等待播放音乐</div>
+            <div class="lyric-line lyric-next2" id="lyricNext2"></div>
         </div>
         <!-- 歌词条点击后浮现的控制行（3秒无操作自动隐藏） -->
         <div class="bar-controls" id="barControls">
@@ -1015,6 +1023,7 @@
         const singleLyricDom = document.getElementById("singleLyric");
         const lyricPrevDom = document.getElementById("lyricPrev");
         const lyricCurDom = document.getElementById("lyricCur");
+        const lyricNext2Dom = document.getElementById("lyricNext2");
         const resizeHandle = document.getElementById("resizeHandle");
         let isLyricBarMode = false;
 
@@ -1352,9 +1361,10 @@
         }
         function setBarMsg(msg){
             lastLyricIdx = -1;
-            // 上排=正在播放的句子（高亮），下排=下一句（暗色）
+            // 上排=正在播放的句子（高亮），下面依次是下一句、下下句（暗色）
             lyricPrevDom.textContent = msg;
             lyricCurDom.textContent = "";
+            lyricNext2Dom.textContent = "";
         }
         async function loadLyric(lrcFileName){
             lyricLines = [];
@@ -1408,17 +1418,20 @@
             }
             if(activeIndex === lastLyricIdx) return;
             lastLyricIdx = activeIndex;
-            // QQ音乐式双行：上排=正在播放的句子（高亮），下排=下一句（暗色），换句时整体上滑
+            // 双行/三行：上排=正在播放（高亮），下面依次显示下一句、下下句（暗色），换句时整体上滑
             lyricPrevDom.textContent = lyricLines[activeIndex].text || " ";
             lyricCurDom.textContent = activeIndex + 1 < lyricLines.length ? (lyricLines[activeIndex + 1].text || " ") : " ";
+            lyricNext2Dom.textContent = activeIndex + 2 < lyricLines.length ? (lyricLines[activeIndex + 2].text || " ") : " ";
             singleLyricDom.classList.remove("slide");
             void singleLyricDom.offsetWidth;
             singleLyricDom.classList.add("slide");
         }
-        // 悬浮窗高度不足 78px 时歌词自动缩减为一行
+        // 歌词行数随悬浮窗高度自适应：<78px 一行，>=110px 三行，其余两行
         function syncBarLines(){
             if(!isLyricBarMode) return;
-            audioPanel.classList.toggle("one-line", audioPanel.offsetHeight < 78);
+            const h = audioPanel.offsetHeight;
+            audioPanel.classList.toggle("one-line", h < 78);
+            audioPanel.classList.toggle("three-line", h >= 110);
         }
 
         function restorePanelPos(){
