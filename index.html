@@ -496,56 +496,129 @@
             padding:0 14px;
             background:rgba(255,230,238,0.55);
             backdrop-filter: blur(8px);
-            gap:12px;
+            gap:0;
         }
-        /*长条模式隐藏音量整行*/
-        .audio-panel.lyric-bar-mode .volume-wrap{
+        /* 歌词条模式默认隐藏全部按钮，只留歌词（点击浮现控制行） */
+        .audio-panel.lyric-bar-mode .btn-row,
+        .audio-panel.lyric-bar-mode .volume-wrap,
+        .audio-panel.lyric-bar-mode .reset-icon{
             display:none;
         }
-        .audio-panel.lyric-bar-mode .btn-row{
-            gap:4px;
+        /* 两行歌词显示区（默认隐藏，长条模式才显示） */
+        .single-lyric-text{
+            display:none;
         }
-        .audio-panel.lyric-bar-mode .audio-icon{
-            width:28px;
-            height:28px;
-            font-size:13px;
+        .audio-panel.lyric-bar-mode .single-lyric-text{
+            display:flex;
+            flex:1;
+            min-width:0;
+            flex-direction:column;
+            justify-content:center;
+            gap:2px;
+            overflow:hidden;
+            text-align:center;
+            cursor:pointer;
         }
-        .audio-panel.lyric-bar-mode .play-main{
-            width:32px;
-            height:32px;
+        .lyric-line{
+            font-size:15px;
+            line-height:1.35;
+            color:#a87389;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .lyric-line.lyric-cur{
+            font-size:18px;
+            color:#e0447f;
+            font-weight:bold;
+        }
+        /* 悬浮窗高度不足时自动缩减为一行 */
+        .audio-panel.lyric-bar-mode.one-line .lyric-prev{
+            display:none;
+        }
+        /* 歌词切换时的上滑滚动动画 */
+        .audio-panel.lyric-bar-mode .single-lyric-text.slide .lyric-line{
+            animation: lyricSlide .35s ease;
+        }
+        @keyframes lyricSlide{
+            from{ transform:translateY(12px); opacity:.1; }
+            to{ transform:translateY(0); opacity:1; }
+        }
+        /* 点击歌词条后浮现的控制行（3秒无操作自动隐藏） */
+        .bar-controls{
+            position:absolute;
+            inset:0;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            gap:16px;
+            background:rgba(255,230,238,0.92);
+            border-radius:inherit;
+            z-index:6;
+        }
+        .bar-controls.show{
+            display:flex;
+        }
+        .bar-controls .audio-icon{
+            width:34px;
+            height:34px;
+            font-size:14px;
+        }
+        .bar-controls .play-main{
+            width:40px;
+            height:40px;
+        }
+        /* 播放列表弹层 */
+        .playlist-pop{
+            position:absolute;
+            right:0;
+            width:230px;
+            max-height:300px;
+            overflow-y:auto;
+            background:#fff;
+            border-radius:12px;
+            box-shadow:0 6px 24px rgba(123,65,87,.28);
+            padding:8px;
+            display:none;
+            z-index:60;
+        }
+        .playlist-pop.show{
+            display:block;
+        }
+        .playlist-pop .pl-item{
+            padding:9px 12px;
+            border-radius:8px;
+            font-size:14px;
+            color:#7b4157;
+            cursor:pointer;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:8px;
+        }
+        .playlist-pop .pl-item:hover{
+            background:#ffe6ee;
+        }
+        .playlist-pop .pl-item.active{
+            background:#ff88aa;
+            color:#fff;
+        }
+        .playlist-pop .pl-tag{
+            font-size:11px;
+            opacity:.75;
+            flex:none;
         }
         /* 手机端音频面板适配 */
         @media (max-width: 600px){
             .audio-panel.lyric-bar-mode{
                 max-width: calc(100vw - 40px);
             }
-            .audio-panel.lyric-bar-mode .single-lyric-text{
-                font-size: 16px;
+            .lyric-line{
+                font-size:14px;
             }
-        }
-        /* 平板端适配：歌词条自动占屏幕约70%宽 */
-        @media (min-width: 601px) and (max-width: 1366px) and (pointer: coarse){
-            .audio-panel.lyric-bar-mode{
-                width: 70vw;
-                max-width: 900px;
+            .lyric-line.lyric-cur{
+                font-size:16px;
             }
-            .audio-panel.lyric-bar-mode .single-lyric-text{
-                font-size: 22px;
-            }
-        }
-        /* 单句歌词显示区域（默认隐藏，长条模式才显示） */
-        .single-lyric-text{
-            display:none;
-        }
-        .audio-panel.lyric-bar-mode .single-lyric-text{
-            display:block;
-            flex:1;
-            text-align:center;
-            font-size:20px;
-            color:#7b4157;
-            white-space:nowrap;
-            overflow:hidden;
-            text-overflow:ellipsis;
         }
 
         .btn-row{
@@ -705,6 +778,7 @@
             <button class="audio-icon" id="prevBtn" title="上一首">⏮</button>
             <button class="audio-icon play-main" id="musicBtn" title="播放/暂停">▶</button>
             <button class="audio-icon" id="nextBtn" title="下一首">⏭</button>
+            <button class="audio-icon" id="listBtn" title="播放列表">☰</button>
         </div>
         <!--第二排独立一行：音量滑块 + 词按钮-->
         <div class="volume-wrap">
@@ -712,8 +786,20 @@
             <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.7">
             <button class="audio-icon" id="lyricToggleBtn" title="切换桌面歌词模式">词</button>
         </div>
-        <!-- 长条模式才会显示的单句歌词 -->
-        <div class="single-lyric-text" id="singleLyric">等待播放音乐</div>
+        <!-- 歌词条模式的两行歌词显示区 -->
+        <div class="single-lyric-text" id="singleLyric">
+            <div class="lyric-line lyric-prev" id="lyricPrev"></div>
+            <div class="lyric-line lyric-cur" id="lyricCur">等待播放音乐</div>
+        </div>
+        <!-- 歌词条点击后浮现的控制行（3秒无操作自动隐藏） -->
+        <div class="bar-controls" id="barControls">
+            <button class="audio-icon" id="barPrevBtn" title="上一首">⏮</button>
+            <button class="audio-icon play-main" id="barPlayBtn" title="播放/暂停">▶</button>
+            <button class="audio-icon" id="barNextBtn" title="下一首">⏭</button>
+            <button class="audio-icon" id="barListBtn" title="播放列表">☰</button>
+        </div>
+        <!-- 播放列表弹层 -->
+        <div class="playlist-pop" id="playlistPop"></div>
         <!--缩放手柄 右下角-->
         <div class="resize-handle" id="resizeHandle"></div>
     </div>
@@ -760,10 +846,10 @@
             // lrcOffset: 歌词偏移秒数（正数=提前，负数=延后）
             // lrcScale: 歌词时间轴缩放（校准快慢漂移）
             // lrcCalib: 分段锚点校准 [播放器秒, 对应歌词时间轴秒]，优先级最高
-            {filePath:"bg1.mp3", showName:"歌曲1", lrcPath:"bg1.lrc", lrcOffset:0.5, lrcScale:1},
-            {filePath:"bg2.mp3", showName:"歌曲2", lrcPath:"bg2.lrc", lrcOffset:0, lrcScale:1,
+            {filePath:"bg1.mp3", showName:"有你在", lrcPath:"bg1.lrc", lrcOffset:0.5, lrcScale:1},
+            {filePath:"bg2.mp3", showName:"小星星", lrcPath:"bg2.lrc", lrcOffset:0, lrcScale:1,
                 lrcCalib:[[0,0],[18.2,19],[94.4,95],[192.5,187],[196.9,196]]},
-            {filePath:"bg3.mp3", showName:"歌曲3", lrcPath:"bg3.lrc", lrcOffset:0.5, lrcScale:1}
+            {filePath:"bg3.mp3", showName:"像晴天像雨天", lrcPath:"bg3.lrc", lrcOffset:0.5, lrcScale:1}
         ];
 
         let currentSongIndex = 0;
@@ -896,14 +982,20 @@
 
         //歌词全局
         let lyricLines = [];
+        let lastLyricIdx = -1;
         const audioPanel = document.getElementById("audioPanel");
         const lyricToggleBtn = document.getElementById("lyricToggleBtn");
         const singleLyricDom = document.getElementById("singleLyric");
+        const lyricPrevDom = document.getElementById("lyricPrev");
+        const lyricCurDom = document.getElementById("lyricCur");
         const resizeHandle = document.getElementById("resizeHandle");
         let isLyricBarMode = false;
 
         //拖拽移动变量
         let isDragMove = false;
+        let dragMoved = false;
+        let dragDownX = 0;
+        let dragDownY = 0;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
 
@@ -1231,11 +1323,16 @@
             result.sort((a,b)=>a.time - b.time);
             return result;
         }
+        function setBarMsg(msg){
+            lastLyricIdx = -1;
+            lyricPrevDom.textContent = "";
+            lyricCurDom.textContent = msg;
+        }
         async function loadLyric(lrcFileName){
             lyricLines = [];
-            singleLyricDom.innerText = "加载歌词…";
+            setBarMsg("加载歌词…");
             if(!lrcFileName || lrcFileName.trim()===""){
-                singleLyricDom.innerText = "暂无歌词";
+                setBarMsg("暂无歌词");
                 return;
             }
             try{
@@ -1244,12 +1341,12 @@
                 const lrcText = await resp.text();
                 lyricLines = parseLrc(lrcText);
                 if(lyricLines.length ===0){
-                    singleLyricDom.innerText="暂无歌词";
+                    setBarMsg("暂无歌词");
                 }else{
-                    singleLyricDom.innerText = lyricLines[0].text || "等待播放";
+                    setBarMsg(lyricLines[0].text || "等待播放");
                 }
             }catch(err){
-                singleLyricDom.innerText = "歌词加载失败";
+                setBarMsg("歌词加载失败");
             }
         }
         // 歌词校准：按歌曲独立生效（在 loadSong 中切换）
@@ -1281,7 +1378,19 @@
                     activeIndex = i;
                 }else break;
             }
-            singleLyricDom.innerText = lyricLines[activeIndex].text;
+            if(activeIndex === lastLyricIdx) return;
+            lastLyricIdx = activeIndex;
+            // 两行滚动：上行=上一句（暗色），下行=当前句（高亮），切换时整体上滑
+            lyricCurDom.textContent = lyricLines[activeIndex].text || " ";
+            lyricPrevDom.textContent = activeIndex > 0 ? (lyricLines[activeIndex-1].text || " ") : " ";
+            singleLyricDom.classList.remove("slide");
+            void singleLyricDom.offsetWidth;
+            singleLyricDom.classList.add("slide");
+        }
+        // 悬浮窗高度不足 78px 时歌词自动缩减为一行
+        function syncBarLines(){
+            if(!isLyricBarMode) return;
+            audioPanel.classList.toggle("one-line", audioPanel.offsetHeight < 78);
         }
 
         function restorePanelPos(){
@@ -1297,6 +1406,7 @@
                 isLyricBarMode = true;
                 audioPanel.classList.add("lyric-bar-mode");
             }
+            syncBarLines();
         }
         restorePanelPos();
 
@@ -1329,6 +1439,9 @@
         audioPanel.addEventListener("pointerdown",(e)=>{
             if(e.target.closest(".audio-icon") || e.target===resizeHandle) return;
             isDragMove = true;
+            dragMoved = false;
+            dragDownX = e.clientX;
+            dragDownY = e.clientY;
             dragOffsetX = e.clientX - audioPanel.offsetLeft;
             dragOffsetY = e.clientY - audioPanel.offsetTop;
             audioPanel.style.right = "auto";
@@ -1345,6 +1458,7 @@
 
         document.addEventListener("pointermove",(e)=>{
             if(isDragMove){
+                if(Math.abs(e.clientX - dragDownX) > 6 || Math.abs(e.clientY - dragDownY) > 6) dragMoved = true;
                 let x = e.clientX - dragOffsetX;
                 let y = e.clientY - dragOffsetY;
                 const w = audioPanel.offsetWidth;
@@ -1370,6 +1484,7 @@
             if(isDragMove||isResize){
                 isDragMove = false;
                 isResize = false;
+                syncBarLines();
                 savePanelPosSize();
             }
         })
@@ -1378,7 +1493,9 @@
             isLyricBarMode = !isLyricBarMode;
             if(isLyricBarMode){
                 audioPanel.classList.add("lyric-bar-mode");
+                syncBarLines();
             }else{
+                hideBarControls();
                 audioPanel.classList.remove("lyric-bar-mode");
             }
             savePanelPosSize();
@@ -1419,16 +1536,21 @@
             }
         });
 
+        // 同步普通面板和歌词条控制行的播放/暂停图标
+        function setPlayIcon(txt){
+            musicBtn.innerText = txt;
+            barPlayBtn.innerText = txt;
+        }
         musicBtn.onclick = ()=>{
             if(music.paused){
                 music.play().catch(err=>{
                     // 浏览器自动播放策略限制，静默处理，用户再次点击即可
-                    musicBtn.innerText = "▶";
+                    setPlayIcon("▶");
                 });
-                musicBtn.innerText = "⏸";
+                setPlayIcon("⏸");
             }else{
                 music.pause();
-                musicBtn.innerText = "▶";
+                setPlayIcon("▶");
             }
         }
         prevBtn.onclick = ()=>{
@@ -1436,21 +1558,21 @@
             if(currentSongIndex < 0) currentSongIndex = getSongs().length -1;
             loadSong(currentSongIndex);
             music.play().catch(e=>{});
-            musicBtn.innerText = "⏸";
+            setPlayIcon("⏸");
         }
         nextBtn.onclick = ()=>{
             currentSongIndex++;
             if(currentSongIndex >= getSongs().length) currentSongIndex = 0;
             loadSong(currentSongIndex);
             music.play().catch(e=>{});
-            musicBtn.innerText = "⏸";
+            setPlayIcon("⏸");
         }
         music.onended = function(){
             currentSongIndex++;
             if(currentSongIndex >= getSongs().length) currentSongIndex = 0;
             loadSong(currentSongIndex);
             music.play().catch(e=>{});
-            musicBtn.innerText = "⏸";
+            setPlayIcon("⏸");
         }
         volumeSlider.oninput = function(){
             music.volume = this.value;
@@ -1458,6 +1580,97 @@
         music.ontimeupdate = function(){
             updateSingleLyric(music.currentTime);
         }
+
+        // ===== 歌词条控制行（点击浮现，3秒无操作自动隐藏）=====
+        const barControls = document.getElementById("barControls");
+        const barPlayBtn = document.getElementById("barPlayBtn");
+        const barPrevBtn = document.getElementById("barPrevBtn");
+        const barNextBtn = document.getElementById("barNextBtn");
+        const barListBtn = document.getElementById("barListBtn");
+        const listBtn = document.getElementById("listBtn");
+        const playlistPop = document.getElementById("playlistPop");
+        let barTimer = null;
+        function showBarControls(){
+            if(!isLyricBarMode) return;
+            barControls.classList.add("show");
+            clearTimeout(barTimer);
+            barTimer = setTimeout(hideBarControls, 3000);
+        }
+        function hideBarControls(){
+            clearTimeout(barTimer);
+            barControls.classList.remove("show");
+            playlistPop.classList.remove("show");
+        }
+        function renderPlaylist(){
+            playlistPop.innerHTML = "";
+            getSongs().forEach(function(s, i){
+                const item = document.createElement("div");
+                item.className = "pl-item" + (i === currentSongIndex ? " active" : "");
+                const nameSpan = document.createElement("span");
+                nameSpan.textContent = s.showName || ("歌曲" + (i + 1));
+                item.appendChild(nameSpan);
+                if(s.hasLrc){
+                    const tag = document.createElement("span");
+                    tag.className = "pl-tag";
+                    tag.textContent = "词";
+                    item.appendChild(tag);
+                }
+                item.onclick = function(){
+                    playlistPop.classList.remove("show");
+                    if(i !== currentSongIndex){
+                        currentSongIndex = i;
+                        loadSong(i);
+                        music.play().catch(e=>{});
+                        setPlayIcon("⏸");
+                    }
+                    showBarControls();
+                };
+                playlistPop.appendChild(item);
+            });
+        }
+        function togglePlaylist(){
+            if(playlistPop.classList.contains("show")){
+                playlistPop.classList.remove("show");
+                showBarControls();
+            }else{
+                renderPlaylist();
+                // 悬浮窗太靠上时列表向下弹，避免被屏幕边缘裁掉
+                const rect = audioPanel.getBoundingClientRect();
+                if(rect.top < 340){
+                    playlistPop.style.top = "calc(100% + 10px)";
+                    playlistPop.style.bottom = "auto";
+                }else{
+                    playlistPop.style.bottom = "calc(100% + 10px)";
+                    playlistPop.style.top = "auto";
+                }
+                playlistPop.classList.add("show");
+                clearTimeout(barTimer); // 列表打开期间不自动隐藏控制行
+            }
+        }
+        barPrevBtn.onclick = function(){ prevBtn.click(); showBarControls(); };
+        barNextBtn.onclick = function(){ nextBtn.click(); showBarControls(); };
+        barPlayBtn.onclick = function(){ musicBtn.click(); showBarControls(); };
+        barListBtn.onclick = function(){ togglePlaylist(); };
+        listBtn.onclick = function(){ togglePlaylist(); };
+        // 点击歌词条：显示/隐藏控制行（拖动结束的那次点击不触发）
+        audioPanel.addEventListener("click", function(e){
+            if(!isLyricBarMode) return;
+            if(e.target.closest(".audio-icon") || e.target === resizeHandle) return;
+            if(dragMoved){ dragMoved = false; return; }
+            if(barControls.classList.contains("show")){
+                if(playlistPop.classList.contains("show")) return;
+                hideBarControls();
+            }else{
+                showBarControls();
+            }
+        });
+        // 点击面板外关闭播放列表
+        document.addEventListener("pointerdown", function(e){
+            if(!audioPanel.contains(e.target)){
+                playlistPop.classList.remove("show");
+            }
+        });
+        window.addEventListener("resize", syncBarLines);
 
         const lightbox = document.getElementById('lightbox');
         const lightImg = document.getElementById('lightImg');
