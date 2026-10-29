@@ -905,26 +905,37 @@
         document.getElementById("uploadPhotoBtn").onclick = async function(){
             const input = document.getElementById("photoFiles");
             const tip = document.getElementById("uploadTip");
-            if(!input.files || input.files.length === 0){ tip.textContent = "请先选择照片"; return; }
+            const files = Array.prototype.slice.call(input.files || []).filter(f => f.size > 0);
+            if(files.length === 0){ tip.textContent = "请先选择照片"; return; }
             const btn = this;
             btn.disabled = true;
-            tip.textContent = "照片上传中…";
-            try{
-                const fd = new FormData();
-                for(const f of input.files){ fd.append("files", f); }
-                const res = await fetch("api/photos", { method:"POST", body: fd });
-                const d = await res.json();
-                if(res.ok && d.ok && Array.isArray(d.saved)){
-                    for(const p of d.saved){ uploadedPhotos.push({src:"api/photos?id="+p.id, tags:["上传"]}); }
-                    renderGallery(currentFilter);
-                    input.value = "";
-                    tip.textContent = "✅ 上传成功，照片已加入照片墙";
-                }else{
-                    tip.textContent = "上传失败：" + (d && d.error ? d.error : res.status);
-                }
-            }catch(e){
-                tip.textContent = "上传失败：此入口仅在 EdgeOne 版可用";
+            const saved = [];
+            let failMsg = "";
+            for(let i = 0; i < files.length; i++){
+                const f = files[i];
+                if(f.size > 10 * 1024 * 1024){ failMsg = "「" + f.name + "」超过10MB已跳过"; continue; }
+                tip.textContent = "照片上传中 (" + (i + 1) + "/" + files.length + ")：" + f.name;
+                try{
+                    // 直传三步：init 要地址 → 浏览器 PUT 直传 → finish 登记（绕开函数 1MB 请求体限制）
+                    const type = (f.type && f.type.indexOf("image/") === 0) ? f.type : "image/jpeg";
+                    const initRes = await fetch("api/photos?mode=init", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ name: f.name, size: f.size, type: type }) });
+                    const init = await initRes.json();
+                    if(!initRes.ok || !init.ok) throw new Error(init.error || initRes.status);
+                    const putRes = await fetch(init.url, { method: "PUT", headers: { "Content-Type": type }, body: f });
+                    if(!putRes.ok) throw new Error("直传失败" + putRes.status);
+                    const finRes = await fetch("api/photos?mode=finish", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ id: init.id, name: f.name, type: type }) });
+                    const fin = await finRes.json();
+                    if(!finRes.ok || !fin.ok || !fin.saved) throw new Error(fin.error || finRes.status);
+                    saved.push(fin.saved);
+                }catch(e){ failMsg = "「" + f.name + "」上传失败：" + (e.message || "网络错误"); }
             }
+            if(saved.length > 0){
+                for(const p of saved){ uploadedPhotos.push({src:"api/photos?id="+p.id, tags:["上传"]}); }
+                renderGallery(currentFilter);
+                input.value = "";
+            }
+            if(failMsg){ tip.textContent = failMsg + (saved.length > 0 ? "（其余 " + saved.length + " 张已成功）" : ""); }
+            else{ tip.textContent = "✅ 上传成功 " + saved.length + " 张，照片已加入照片墙"; }
             btn.disabled = false;
         };
 
@@ -933,25 +944,28 @@
             const lf = document.getElementById("lrcFile");
             const tip = document.getElementById("uploadTip");
             if(!sf.files || sf.files.length === 0){ tip.textContent = "请先选择 mp3 文件"; return; }
+            const f = sf.files[0];
             const btn = this;
             btn.disabled = true;
             tip.textContent = "歌曲上传中…（文件较大请稍等）";
             try{
-                const fd = new FormData();
-                fd.append("mp3", sf.files[0]);
-                if(lf.files && lf.files.length > 0){ fd.append("lrc", lf.files[0]); }
-                const res = await fetch("api/songs", { method:"POST", body: fd });
-                const d = await res.json();
-                if(res.ok && d.ok && d.song){
-                    uploadedSongs.push({remote:true, id:d.song.id, showName:d.song.name, hasLrc:!!d.song.hasLrc});
-                    sf.value = "";
-                    lf.value = "";
-                    tip.textContent = "✅ 上传成功，点下一首即可播放新歌";
-                }else{
-                    tip.textContent = "上传失败：" + (d && d.error ? d.error : res.status);
-                }
+                // 直传三步：init 要地址 → 浏览器 PUT 直传 → finish 登记（绕开函数 1MB 请求体限制）
+                const initRes = await fetch("api/songs?mode=init", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ name: f.name, size: f.size }) });
+                const init = await initRes.json();
+                if(!initRes.ok || !init.ok) throw new Error(init.error || initRes.status);
+                const putRes = await fetch(init.url, { method: "PUT", headers: { "Content-Type": "audio/mpeg" }, body: f });
+                if(!putRes.ok) throw new Error("直传失败" + putRes.status);
+                let lrcText = null;
+                if(lf.files && lf.files.length > 0){ lrcText = await lf.files[0].text(); }
+                const finRes = await fetch("api/songs?mode=finish", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ id: init.id, name: f.name, lrc: lrcText }) });
+                const fin = await finRes.json();
+                if(!finRes.ok || !fin.ok || !fin.song) throw new Error(fin.error || finRes.status);
+                uploadedSongs.push({remote:true, id:fin.song.id, showName:fin.song.name, hasLrc:!!fin.song.hasLrc});
+                sf.value = "";
+                lf.value = "";
+                tip.textContent = "✅ 上传成功，点下一首即可播放新歌";
             }catch(e){
-                tip.textContent = "上传失败：此入口仅在 EdgeOne 版可用";
+                tip.textContent = "上传失败：" + (e.message || "此入口仅在 EdgeOne 版可用");
             }
             btn.disabled = false;
         };

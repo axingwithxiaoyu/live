@@ -75,6 +75,41 @@ export async function onRequest({ request }){
     }
 
     if(request.method === "POST"){
+        const mode = url.searchParams.get("mode");
+        // mode=init：生成浏览器直传地址（EdgeOne 函数请求体上限 1MB，大文件必须绕开函数）
+        if(mode === "init"){
+            let body = null;
+            try{ body = await request.json(); }catch(e){}
+            const size = Number(body && body.size) || 0;
+            if(size <= 0) return json({ ok: false, error: "NO_MP3" }, 400);
+            if(size > 50 * 1024 * 1024) return json({ ok: false, error: "MP3_TOO_LARGE" }, 400);
+            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            try{
+                const up = await store.createUploadUrl("song/" + id + ".mp3", { contentType: "audio/mpeg", expireSeconds: 3600 });
+                return json({ ok: true, id: id, url: up.url });
+            }catch(e){ return json({ ok: false, error: "UPLOAD_URL_FAIL" }, 500); }
+        }
+        // mode=finish：直传完成后校验并登记元数据（lrc 文本随 JSON 带上）
+        if(mode === "finish"){
+            let body = null;
+            try{ body = await request.json(); }catch(e){}
+            const id = String((body && body.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            try{
+                const md = await store.getMetadata("song/" + id + ".mp3", { consistency: "strong" });
+                if(!md) return json({ ok: false, error: "UPLOAD_NOT_FOUND" }, 400);
+            }catch(e){ return json({ ok: false, error: "UPLOAD_NOT_FOUND" }, 400); }
+            let hasLrc = false;
+            const lrcText = String((body && body.lrc) || "");
+            if(lrcText && lrcText.length < 200 * 1024){
+                try{ await store.set("song/" + id + ".lrc", lrcText); hasLrc = true; }catch(e){}
+            }
+            const rawName = String((body && body.name) || "未命名").replace(/\.mp3$/i, "");
+            const meta = { id: id, name: rawName.slice(0, 50), hasLrc: hasLrc, ts: Date.now() };
+            try{ await store.set("meta/song/" + id, JSON.stringify(meta)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
+            return json({ ok: true, song: meta });
+        }
+        // 兼容：≤1MB 小文件的旧直传（multipart）
         let form;
         try{ form = await request.formData(); }catch(e){ return json({ ok: false, error: "BAD_FORM" }, 400); }
         const mp3 = form.get("mp3");
