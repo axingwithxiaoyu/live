@@ -338,6 +338,25 @@
             font-size:14px;
             color:#b0748c;
             margin-bottom:10px;
+            cursor:pointer;
+            user-select:none;
+            transition:0.2s;
+        }
+        .manage-title:hover{
+            color:#7b4157;
+        }
+        .mg-arrow{
+            display:inline-block;
+            font-size:10px;
+            margin-right:5px;
+            transition:transform 0.2s;
+        }
+        .upload-manage.collapsed .mg-arrow{
+            transform:rotate(-90deg);
+        }
+        .upload-manage.collapsed #managePhotos,
+        .upload-manage.collapsed #manageSongs{
+            display:none;
         }
         .manage-grid{
             display:grid;
@@ -959,7 +978,7 @@
                         <button id="uploadSongBtn">上传歌曲</button>
                     </div>
                     <div class="upload-manage">
-                        <div class="manage-title">🗂 已上传内容（点 ✕ 删除）</div>
+                        <div class="manage-title" id="manageTitle"><span class="mg-arrow">▼</span>🗂 已上传内容（点 ✕ 删除）</div>
                         <div id="managePhotos" class="manage-grid"></div>
                         <div id="manageSongs" class="manage-list"></div>
                     </div>
@@ -1102,6 +1121,14 @@
                 }
             };
         });
+        // 已上传内容管理区：默认折叠，点标题展开/收起
+        ;(function(){
+            const mg = document.querySelector(".upload-manage");
+            const title = document.getElementById("manageTitle");
+            if(!mg || !title) return;
+            mg.classList.add("collapsed");
+            title.onclick = function(){ mg.classList.toggle("collapsed"); };
+        })();
         let userNotes = JSON.parse(localStorage.getItem("loveNotes")) || [];
 
         // ========== 共享后端：EdgeOne 版走自家 API，GitHub Pages 版走 Supabase，都没有则本地 ==========
