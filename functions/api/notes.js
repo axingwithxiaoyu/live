@@ -101,6 +101,8 @@ export async function onRequest({ request }){
             ts: Date.now()
         };
         if(date) note.date = date;
+        const sign = String((body && body.sign) || "");
+        if(sign === "star" || sign === "fish") note.sign = sign;
         try{
             await store.set("note/" + note.id, JSON.stringify(note));
         }catch(e){

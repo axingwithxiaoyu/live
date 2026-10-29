@@ -522,6 +522,43 @@
         .note.pinned{
             box-shadow:2px 3px 10px rgba(255,136,170,0.4);
         }
+        .note-sign{
+            position:absolute;
+            bottom:8px;
+            left:10px;
+            opacity:0.9;
+            filter:drop-shadow(0 1px 1px rgba(0,0,0,0.12));
+        }
+        .sign-pick{
+            display:flex;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:8px;
+            margin-top:10px;
+        }
+        .sign-label{
+            font-size:14px;
+            color:#b0748c;
+        }
+        .sign-chip{
+            padding:5px 14px;
+            border-radius:999px;
+            border:2px solid #ffd6e4;
+            background:#fff;
+            color:#7b4157;
+            cursor:pointer;
+            font-size:13px;
+            transition:0.2s;
+        }
+        .sign-chip.active{
+            background:#ff88aa;
+            color:#fff;
+            border-color:#ff88aa;
+        }
+        .sign-hint{
+            font-size:12px;
+            color:#c2889f;
+        }
         .note-1{background:#fff8bc; --r:-2deg;}
         .note-2{background:#ffddee; --r:2deg;}
         .note-3{background:#dcf6ff; --r:-1.5deg;}
@@ -887,6 +924,12 @@
             <h2 class="block-title">💛 留言墙</h2>
             <div class="note-input-area">
                 <textarea id="noteTextarea" placeholder="写下你想对TA说的话…"></textarea>
+                <div class="sign-pick">
+                    <span class="sign-label">署名：</span>
+                    <button type="button" class="sign-chip" data-sign="star"><svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align:-2px;margin-right:4px"><path d="M12 2.5 L14.6 8.4 L21 9.1 L16.2 13.4 L17.5 19.7 L12 16.5 L6.5 19.7 L7.8 13.4 L3 9.1 L9.4 8.4 Z" fill="#ffd76e" stroke="#e8a0b4" stroke-width="1" stroke-linejoin="round"/></svg>星星</button>
+                    <button type="button" class="sign-chip" data-sign="fish"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:4px"><path d="M2.5 12 C4.5 8.5 8.5 6.5 12.5 6.5 C16 6.5 18.5 8.5 20 12 C18.5 15.5 16 17.5 12.5 17.5 C8.5 17.5 4.5 15.5 2.5 12 Z" fill="#ffc2d4" stroke="#e87fa0" stroke-width="1.2"/><path d="M20 12 L23 8.5 L23 15.5 Z" fill="#ffc2d4" stroke="#e87fa0" stroke-width="1.2" stroke-linejoin="round"/><circle cx="6.8" cy="11" r="1.1" fill="#e87fa0"/></svg>小鱼</button>
+                    <span class="sign-hint">可不选</span>
+                </div>
                 <div class="note-btn-row">
                     <button id="addNoteBtn">添加留言</button>
                 </div>
@@ -1040,6 +1083,21 @@
                 }else{
                     pickedAlbum = val;
                     document.querySelectorAll(".album-chip").forEach(c=>c.classList.remove("active"));
+                    this.classList.add("active");
+                }
+            };
+        });
+        // 留言署名选择：空 = 不署名
+        let pickedSign = "";
+        document.querySelectorAll(".sign-chip").forEach(ch=>{
+            ch.onclick = function(){
+                const val = this.dataset.sign;
+                if(pickedSign === val){
+                    pickedSign = "";
+                    this.classList.remove("active");
+                }else{
+                    pickedSign = val;
+                    document.querySelectorAll(".sign-chip").forEach(c=>c.classList.remove("active"));
                     this.classList.add("active");
                 }
             };
@@ -1249,6 +1307,17 @@
             if(n && n.created_at){ const s = fmtNoteDate(n.created_at); if(s) return s; }
             return LEGACY_NOTE_DATE;
         }
+        // 署名图标（星星 / 小鱼）
+        const SIGN_SVG = {
+            star: '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 2.5 L14.6 8.4 L21 9.1 L16.2 13.4 L17.5 19.7 L12 16.5 L6.5 19.7 L7.8 13.4 L3 9.1 L9.4 8.4 Z" fill="#ffd76e" stroke="#e8a0b4" stroke-width="1" stroke-linejoin="round"/></svg>',
+            fish: '<svg viewBox="0 0 24 24" width="17" height="17"><path d="M2.5 12 C4.5 8.5 8.5 6.5 12.5 6.5 C16 6.5 18.5 8.5 20 12 C18.5 15.5 16 17.5 12.5 17.5 C8.5 17.5 4.5 15.5 2.5 12 Z" fill="#ffc2d4" stroke="#e87fa0" stroke-width="1.2"/><path d="M20 12 L23 8.5 L23 15.5 Z" fill="#ffc2d4" stroke="#e87fa0" stroke-width="1.2" stroke-linejoin="round"/><circle cx="6.8" cy="11" r="1.1" fill="#e87fa0"/></svg>'
+        };
+        function noteSignHtml(n){
+            const s = n && n.sign;
+            if(!(s && SIGN_SVG[s])) return "";
+            const title = s === "star" ? "星星" : "小鱼";
+            return '<span class="note-sign" title="' + title + '">' + SIGN_SVG[s] + '</span>';
+        }
         // 留言所属月份（分组用）：优先显示日期字段 → 时间戳 → 兜底
         function noteYM(n){
             let d = null;
@@ -1326,6 +1395,7 @@
                         <span class="note-pinbtn${item.pinned ? " pinned" : ""}" data-id="${escHtml(item.id)}" title="${item.pinned ? "取消置顶" : "置顶"}">📌</span>
                         <span class="note-del note-del-server" data-id="${escHtml(item.id)}">✕</span>
                         <div class="note-text">${escHtml(item.text)}</div>
+                        ${noteSignHtml(item)}
                         <div class="note-date">${escHtml(noteDateStr(item))}</div>
                     `;
                     return div;
@@ -1387,6 +1457,7 @@
                         <span class="note-pinbtn${item.pinned ? " pinned" : ""}" data-idx="${idx}" title="${item.pinned ? "取消置顶" : "置顶"}">📌</span>
                         <span class="note-del" data-idx="${idx}">✕</span>
                         <div class="note-text">${escHtml(item.content)}</div>
+                        ${noteSignHtml(item)}
                         <div class="note-date">${escHtml(item.date || LEGACY_NOTE_DATE)}</div>
                     `;
                     return div;
@@ -1436,7 +1507,7 @@
                     const res = await fetch("api/notes", {
                         method: "POST",
                         headers: {"content-type": "application/json"},
-                        body: JSON.stringify({ text: txt, date: fmtNoteDate() })
+                        body: JSON.stringify({ text: txt, date: fmtNoteDate(), sign: pickedSign || "" })
                     });
                     const data = await res.json();
                     if(res.ok && data.ok && data.note){
@@ -1450,7 +1521,7 @@
             }
             const clsList = ["note-1","note-2","note-3","note-4"];
             const randomCls = clsList[Math.floor(Math.random()*clsList.length)];
-            userNotes.push({cls:randomCls, content:txt, date:fmtNoteDate()});
+            userNotes.push({cls:randomCls, content:txt, date:fmtNoteDate(), sign: pickedSign || ""});
             saveUserNotes();
             renderAllNotes();
             textarea.value = "";
