@@ -401,6 +401,8 @@
             transition:transform 0.25s ease;
             cursor:default;
             position:relative;
+            display:flex;
+            flex-direction:column;
         }
         .note:hover{
             transform:rotate(0deg) scale(1.05);
@@ -424,6 +426,7 @@
         .note-text{
             font-size:15px;
             line-height:1.6;
+            flex:1;
         }
         .note-date{
             margin-top:8px;
