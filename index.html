@@ -552,7 +552,8 @@
             overflow:hidden;
             text-overflow:ellipsis;
         }
-        .lyric-line.lyric-cur{
+        /* 上排：正在播放的句子（高亮） */
+        .lyric-line.lyric-prev{
             font-size:18px;
             color:#e0447f;
             font-weight:bold;
@@ -1351,8 +1352,9 @@
         }
         function setBarMsg(msg){
             lastLyricIdx = -1;
-            lyricPrevDom.textContent = "";
-            lyricCurDom.textContent = msg;
+            // 上排=正在播放的句子（高亮），下排=下一句（暗色）
+            lyricPrevDom.textContent = msg;
+            lyricCurDom.textContent = "";
         }
         async function loadLyric(lrcFileName){
             lyricLines = [];
@@ -1406,9 +1408,9 @@
             }
             if(activeIndex === lastLyricIdx) return;
             lastLyricIdx = activeIndex;
-            // 两行滚动：上行=上一句（暗色），下行=当前句（高亮），切换时整体上滑
-            lyricCurDom.textContent = lyricLines[activeIndex].text || " ";
-            lyricPrevDom.textContent = activeIndex > 0 ? (lyricLines[activeIndex-1].text || " ") : " ";
+            // QQ音乐式双行：上排=正在播放的句子（高亮），下排=下一句（暗色），换句时整体上滑
+            lyricPrevDom.textContent = lyricLines[activeIndex].text || " ";
+            lyricCurDom.textContent = activeIndex + 1 < lyricLines.length ? (lyricLines[activeIndex + 1].text || " ") : " ";
             singleLyricDom.classList.remove("slide");
             void singleLyricDom.offsetWidth;
             singleLyricDom.classList.add("slide");
