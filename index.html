@@ -500,8 +500,10 @@
             transition: opacity 0.2s ease;
             z-index:8;
         }
-        .audio-panel:hover .adapt-icon{
+        /* 恢复按钮默认隐藏，仅在有自定义大小/位置可恢复时显示 */
+        .audio-panel.adapt-visible .adapt-icon{
             opacity:0.7;
+            pointer-events:auto;
         }
         .adapt-icon:hover{
             opacity:1 !important;
@@ -836,6 +838,7 @@
             <button class="audio-icon play-main" id="barPlayBtn" title="播放/暂停">▶</button>
             <button class="audio-icon" id="barNextBtn" title="下一首">⏭</button>
             <button class="audio-icon" id="barListBtn" title="播放列表">☰</button>
+            <button class="audio-icon" id="barLyricBtn" title="返回普通模式">词</button>
         </div>
         <!-- 恢复默认适配（跟随控制行一起显示/隐藏） -->
         <button class="audio-icon adapt-icon" id="adaptBtn" title="恢复默认适配（两行歌词）">⛶</button>
@@ -1439,6 +1442,12 @@
             audioPanel.classList.toggle("one-line", h < 78);
             audioPanel.classList.toggle("three-line", h >= 110);
         }
+        // ⛶ 恢复按钮：仅当面板有自定义大小/位置时显示（默认大小无需恢复）
+        function syncAdaptBtn(){
+            const saved = localStorage.getItem("audioPanelPosSize");
+            const custom = !!saved || audioPanel.style.width || audioPanel.style.height || audioPanel.style.left || audioPanel.style.top;
+            audioPanel.classList.toggle("adapt-visible", !!custom && !isLyricBarMode);
+        }
 
         function restorePanelPos(){
             const saved = JSON.parse(localStorage.getItem("audioPanelPosSize")||'{}');
@@ -1454,6 +1463,7 @@
                 audioPanel.classList.add("lyric-bar-mode");
             }
             syncBarLines();
+            syncAdaptBtn();
         }
         restorePanelPos();
 
@@ -1468,6 +1478,7 @@
             audioPanel.classList.remove("lyric-bar-mode");
             isLyricBarMode = false;
             syncBarLines();
+            syncAdaptBtn();
         }
         document.getElementById("resetPanelBtn").onclick = function(e){
             e.stopPropagation();
@@ -1483,6 +1494,7 @@
             audioPanel.style.height = "";
             localStorage.removeItem("audioPanelPosSize");
             syncBarLines();
+            syncAdaptBtn();
         }
 
         function savePanelPosSize(){
@@ -1546,6 +1558,7 @@
                 isResize = false;
                 syncBarLines();
                 savePanelPosSize();
+                syncAdaptBtn();
             }
         })
 
@@ -1559,6 +1572,7 @@
                 audioPanel.classList.remove("lyric-bar-mode");
             }
             savePanelPosSize();
+            syncAdaptBtn();
         }
 
         const music = document.getElementById('bgMusic');
@@ -1647,6 +1661,7 @@
         const barPrevBtn = document.getElementById("barPrevBtn");
         const barNextBtn = document.getElementById("barNextBtn");
         const barListBtn = document.getElementById("barListBtn");
+        const barLyricBtn = document.getElementById("barLyricBtn");
         const listBtn = document.getElementById("listBtn");
         const playlistPop = document.getElementById("playlistPop");
         let barTimer = null;
@@ -1711,6 +1726,8 @@
         barNextBtn.onclick = function(){ nextBtn.click(); showBarControls(); };
         barPlayBtn.onclick = function(){ musicBtn.click(); showBarControls(); };
         barListBtn.onclick = function(){ togglePlaylist(); };
+        // "词"按钮：从歌词条返回普通模式
+        barLyricBtn.onclick = function(){ lyricToggleBtn.click(); };
         listBtn.onclick = function(){ togglePlaylist(); };
         // 点击歌词条：显示/隐藏控制行（拖动结束的那次点击不触发）
         audioPanel.addEventListener("click", function(e){
