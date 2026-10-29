@@ -1529,6 +1529,28 @@
         };
 
         // 启动时尝试连接共享留言服务：EdgeOne 优先 → Supabase → 本地
+        // 一次性补写早期留言的署名（幂等：已有署名的自动跳过）
+        const SIGN_BACKFILL = [
+            { t: "今天坏宝宝带我踩夹子", sign: "star" },
+            { t: "嘻嘻，我把你的黑历史", sign: "fish" },
+            { t: "喵喵喵喵", sign: "fish", exact: true },
+            { t: "嘿嘿", sign: "star", exact: true }
+        ];
+        async function backfillSigns(){
+            let changed = false;
+            for(const n of serverNotes){
+                if(n.sign) continue;
+                const txt = String(n.text || "");
+                const hit = SIGN_BACKFILL.find(m => (m.exact ? txt === m.t : txt.indexOf(m.t) === 0));
+                if(!hit) continue;
+                try{
+                    const res = await fetch("api/notes?mode=sign", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: n.id, sign: hit.sign }) });
+                    const d = await res.json();
+                    if(res.ok && d.ok){ n.sign = hit.sign; changed = true; }
+                }catch(e){}
+            }
+            if(changed) renderAllNotes();
+        }
         ;(async function loadServerNotes(){
             const tip = document.getElementById("noteModeTip");
             try{
@@ -1540,6 +1562,7 @@
                         serverMode = true;
                         backendMode = "edgeone";
                         if(tip) tip.textContent = "💬 共享留言模式：TA 也能看到你写的留言";
+                        backfillSigns();
                         renderAllNotes();
                         return;
                     }

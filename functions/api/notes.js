@@ -88,6 +88,24 @@ export async function onRequest({ request }){
             try{ await store.set("note/" + id, JSON.stringify(note)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
             return json({ ok: true, note: note });
         }
+        // mode=sign：设置留言署名（star / fish）
+        if(u.searchParams.get("mode") === "sign"){
+            let db = null;
+            try{ db = await request.json(); }catch(e){}
+            const id = String((db && db.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            const sign = String((db && db.sign) || "");
+            if(sign !== "star" && sign !== "fish") return json({ ok: false, error: "BAD_SIGN" }, 400);
+            let note = null;
+            try{
+                const v = await store.get("note/" + id, { consistency: "strong" });
+                note = v ? JSON.parse(v) : null;
+            }catch(e){}
+            if(!note) return json({ ok: false, error: "NOT_FOUND" }, 404);
+            note.sign = sign;
+            try{ await store.set("note/" + id, JSON.stringify(note)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
+            return json({ ok: true, note: note });
+        }
         let body = null;
         try { body = await request.json(); } catch(e) {}
         const name = String((body && body.name) || "").trim().slice(0, 20) || "匿名";
