@@ -735,10 +735,10 @@
             renderAllNotes();
             textarea.value = "";
             btn.disabled = false;
-        }
+        };
 
         // 启动时尝试连接共享留言服务（EdgeOne 环境生效，静态托管自动回退本地模式）
-        (async function loadServerNotes(){
+        ;(async function loadServerNotes(){
             const tip = document.getElementById("noteModeTip");
             try{
                 const res = await fetch("api/notes");
