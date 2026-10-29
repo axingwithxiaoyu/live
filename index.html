@@ -507,9 +507,14 @@
             opacity:1 !important;
             background:#ffd6e4;
         }
-        /* 歌词条模式下常显低透明度，方便手机直接点按 */
+        /* 歌词条模式：恢复按钮默认隐藏，点击浮现控制行时一起出现 */
         .audio-panel.lyric-bar-mode .adapt-icon{
-            opacity:0.5;
+            opacity:0;
+            pointer-events:none;
+        }
+        .audio-panel.lyric-bar-mode .bar-controls.show ~ .adapt-icon{
+            opacity:0.7;
+            pointer-events:auto;
         }
 
         /* ====== QQ音乐桌面歌词长条模式（PC+手机全部可用） ====== */
@@ -807,7 +812,6 @@
     <!-- 音频面板：第一行播放按键，第二行音量+词按钮 -->
     <div class="audio-panel" id="audioPanel">
         <button class="audio-icon reset-icon" id="resetPanelBtn" title="恢复初始悬浮窗">⟲</button>
-        <button class="audio-icon adapt-icon" id="adaptBtn" title="恢复默认适配（两行歌词）">⛶</button>
         <div class="btn-row">
             <button class="audio-icon" id="prevBtn" title="上一首">⏮</button>
             <button class="audio-icon play-main" id="musicBtn" title="播放/暂停">▶</button>
@@ -833,6 +837,8 @@
             <button class="audio-icon" id="barNextBtn" title="下一首">⏭</button>
             <button class="audio-icon" id="barListBtn" title="播放列表">☰</button>
         </div>
+        <!-- 恢复默认适配（跟随控制行一起显示/隐藏） -->
+        <button class="audio-icon adapt-icon" id="adaptBtn" title="恢复默认适配（两行歌词）">⛶</button>
         <!-- 播放列表弹层 -->
         <div class="playlist-pop" id="playlistPop"></div>
         <!--缩放手柄 右下角-->
