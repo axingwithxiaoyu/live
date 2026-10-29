@@ -1,5 +1,5 @@
 // 留言接口：GET /api/notes 拉取共享留言，POST /api/notes 提交留言
-// 需要在 EdgeOne Pages 项目设置中绑定 KV 命名空间，变量名 NOTES_KV
+// 存储走新版 Blob SDK（@edgeone/pages-blob，media 库，控制台自动创建、无需手动绑定），键 note/<id>
 
 function json(data, status){
     return new Response(JSON.stringify(data), {
@@ -13,42 +13,47 @@ function json(data, status){
     });
 }
 
-function getKV(env){
-    return (env && (env.NOTES_KV || env.KV)) || null;
+let _storePromise = null;
+function loadStore(){
+    if(!_storePromise){
+        _storePromise = import("@edgeone/pages-blob").then(m => {
+            const gs = m.getStore || (m.default && m.default.getStore);
+            return gs ? gs("media") : null;
+        }).catch(() => { _storePromise = null; return null; });
+    }
+    return _storePromise;
 }
 
-async function listNotes(kv){
+async function listNotes(store){
     const out = [];
-    let cursor = undefined;
-    for(let i = 0; i < 10; i++){
-        const opt = { prefix: "note:", limit: 100 };
-        if(cursor) opt.cursor = cursor;
-        const page = await kv.list(opt);
-        const keys = (page && page.keys) ? page.keys : [];
-        for(const k of keys){
-            const v = await kv.get(k.name);
+    const res = await store.list({ prefix: "note/", consistency: "strong" });
+    for(const b of (res.blobs || [])){
+        const id = b.key.slice("note/".length);
+        if(!id) continue;
+        try{
+            const v = await store.get(b.key, { consistency: "strong" });
             if(v){
-                try { out.push(JSON.parse(v)); } catch(e) {}
+                const n = JSON.parse(v);
+                if(!n.id) n.id = id;
+                out.push(n);
             }
-        }
-        if(!page || page.list_complete === true || !page.cursor) break;
-        cursor = page.cursor;
+        }catch(e){}
     }
     out.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     return out.slice(0, 500);
 }
 
-export async function onRequest({ request, env }){
+export async function onRequest({ request }){
     if(request.method === "OPTIONS") return json({ ok: true });
 
-    const kv = getKV(env);
-    if(!kv){
-        return json({ ok: false, error: "KV_NOT_BOUND", hint: "请在EdgeOne Pages项目设置中绑定KV命名空间，变量名NOTES_KV" }, 500);
+    const store = await loadStore();
+    if(!store){
+        return json({ ok: false, error: "BLOB_NOT_READY", hint: "Blob 存储未就绪，请确认部署在 EdgeOne 上" }, 500);
     }
 
     if(request.method === "GET"){
         try{
-            const notes = await listNotes(kv);
+            const notes = await listNotes(store);
             return json({ ok: true, notes: notes });
         }catch(e){
             return json({ ok: false, error: "LIST_FAIL" }, 500);
@@ -68,7 +73,7 @@ export async function onRequest({ request, env }){
             ts: Date.now()
         };
         try{
-            await kv.put("note:" + note.id, JSON.stringify(note));
+            await store.set("note/" + note.id, JSON.stringify(note));
         }catch(e){
             return json({ ok: false, error: "SAVE_FAIL" }, 500);
         }

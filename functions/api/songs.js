@@ -1,5 +1,6 @@
 // 歌曲接口：GET 列表 / GET ?file=id 取音频 / GET ?lrc=id 取歌词 / POST 上传(mp3必选 + 可选lrc)
-// 元数据存 KV(NOTES_KV, 前缀 song:)，音频和歌词存 Blob（新版走 SDK @edgeone/pages-blob 的 media 库，键 song/<id>.mp3 / song/<id>.lrc）
+// 全部走新版 Blob SDK（@edgeone/pages-blob，media 库，自动创建无需绑定）
+// 音频键 song/<id>.mp3，歌词键 song/<id>.lrc，元数据键 meta/song/<id>
 
 function json(data, status){
     return new Response(JSON.stringify(data), {
@@ -12,8 +13,7 @@ function json(data, status){
         }
     });
 }
-function getKV(env){ return (env && (env.NOTES_KV || env.KV)) || null; }
-// Blob：新版 Makers 控制台用官方 SDK（自动创建、自动鉴权）；旧绑定 env.BLOB 作兼容回退
+
 let _storePromise = null;
 function loadStore(){
     if(!_storePromise){
@@ -24,90 +24,57 @@ function loadStore(){
     }
     return _storePromise;
 }
-async function getBlob(env){
-    const legacy = (env && (env.BLOB || env.MEDIA_BLOB || env.BLOBS)) || null;
-    if(legacy && typeof legacy.put === "function" && typeof legacy.get === "function") return legacy;
-    return await loadStore();
-}
-function isSdkStore(b){ return typeof b.set === "function"; }
-async function blobPut(b, key, val){
-    if(isSdkStore(b)){ await b.set(key, val); return; }
-    await b.put(key, val);
-}
-async function blobGetBin(b, key){
-    if(isSdkStore(b)) return await b.get(key, { type: "arrayBuffer", consistency: "strong" });
-    const v = await b.get(key);
-    if(v === undefined || v === null) return null;
-    if(typeof v === "string") return v;
-    if(v instanceof ArrayBuffer || v instanceof Uint8Array) return v;
-    if(typeof v.arrayBuffer === "function") return await v.arrayBuffer();
-    if(v.body) return v.body;
-    return v;
-}
-async function blobGetText(b, key){
-    if(isSdkStore(b)) return await b.get(key, { consistency: "strong" });
-    const v = await b.get(key);
-    if(v === undefined || v === null) return null;
-    if(typeof v === "string") return v;
-    if(v instanceof ArrayBuffer) return new TextDecoder().decode(v);
-    if(typeof v.arrayBuffer === "function") return new TextDecoder().decode(await v.arrayBuffer());
-    if(v.body) return await new Response(v.body).text();
-    return String(v);
-}
-async function listMeta(kv, prefix){
+
+async function metaList(store, prefix){
     const out = [];
-    let cursor;
-    for(let i = 0; i < 10; i++){
-        const opt = { prefix: prefix, limit: 100 };
-        if(cursor) opt.cursor = cursor;
-        const page = await kv.list(opt);
-        const keys = (page && page.keys) ? page.keys : [];
-        for(const k of keys){
-            const v = await kv.get(k.name);
-            if(v){ try{ out.push(JSON.parse(v)); }catch(e){} }
+    try{
+        const res = await store.list({ prefix: prefix, consistency: "strong" });
+        for(const b of (res.blobs || [])){
+            try{
+                const v = await store.get(b.key, { consistency: "strong" });
+                if(v) out.push(JSON.parse(v));
+            }catch(e){}
         }
-        if(!page || page.list_complete === true || !page.cursor) break;
-        cursor = page.cursor;
-    }
+    }catch(e){}
     out.sort((a, b) => (a.ts || 0) - (b.ts || 0));
     return out;
 }
 
-export async function onRequest({ request, env }){
+export async function onRequest({ request }){
     if(request.method === "OPTIONS") return json({ ok: true });
 
-    const kv = getKV(env);
-    if(!kv) return json({ ok: false, error: "KV_NOT_BOUND" }, 500);
+    const store = await loadStore();
+    if(!store) return json({ ok: false, error: "BLOB_NOT_READY" }, 500);
 
     const url = new URL(request.url);
     const fileId = url.searchParams.get("file");
     const lrcId = url.searchParams.get("lrc");
-    const blob = await getBlob(env);
 
     if(request.method === "GET"){
         if(fileId){
-            if(!blob) return json({ ok: false, error: "BLOB_NOT_BOUND" }, 500);
             let data;
-            try{ data = await blobGetBin(blob, "song/" + fileId + ".mp3"); }catch(e){ return json({ ok: false, error: "BLOB_GET_FAIL" }, 500); }
+            try{
+                data = await store.get("song/" + fileId + ".mp3", { type: "arrayBuffer", consistency: "strong" });
+            }catch(e){ return json({ ok: false, error: "BLOB_GET_FAIL" }, 500); }
             if(data === null) return json({ ok: false, error: "NOT_FOUND" }, 404);
             return new Response(data, {
                 headers: { "content-type": "audio/mpeg", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" }
             });
         }
         if(lrcId){
-            if(!blob) return json({ ok: false, error: "BLOB_NOT_BOUND" }, 500);
             let data;
-            try{ data = await blobGetText(blob, "song/" + lrcId + ".lrc"); }catch(e){ return json({ ok: false, error: "BLOB_GET_FAIL" }, 500); }
+            try{
+                data = await store.get("song/" + lrcId + ".lrc", { consistency: "strong" });
+            }catch(e){ return json({ ok: false, error: "BLOB_GET_FAIL" }, 500); }
             if(data === null) return json({ ok: false, error: "NOT_FOUND" }, 404);
             return new Response(data, {
                 headers: { "content-type": "text/plain; charset=utf-8", "access-control-allow-origin": "*" }
             });
         }
-        return json({ ok: true, songs: await listMeta(kv, "song:") });
+        return json({ ok: true, songs: await metaList(store, "meta/song/") });
     }
 
     if(request.method === "POST"){
-        if(!blob) return json({ ok: false, error: "BLOB_NOT_BOUND" }, 500);
         let form;
         try{ form = await request.formData(); }catch(e){ return json({ ok: false, error: "BAD_FORM" }, 400); }
         const mp3 = form.get("mp3");
@@ -116,20 +83,20 @@ export async function onRequest({ request, env }){
         const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         try{
             const buf = await mp3.arrayBuffer();
-            await blobPut(blob, "song/" + id + ".mp3", buf);
+            await store.set("song/" + id + ".mp3", buf);
         }catch(e){ return json({ ok: false, error: "BLOB_PUT_FAIL" }, 500); }
         let hasLrc = false;
         const lrc = form.get("lrc");
         if(lrc && typeof lrc !== "string" && lrc.size > 0 && lrc.size < 200 * 1024){
             try{
                 const text = await lrc.text();
-                await blobPut(blob, "song/" + id + ".lrc", text);
+                await store.set("song/" + id + ".lrc", text);
                 hasLrc = true;
             }catch(e){}
         }
         const rawName = String(mp3.name || "未命名").replace(/\.mp3$/i, "");
         const meta = { id: id, name: rawName.slice(0, 50), hasLrc: hasLrc, ts: Date.now() };
-        await kv.put("song:" + id, JSON.stringify(meta));
+        try{ await store.set("meta/song/" + id, JSON.stringify(meta)); }catch(e){}
         return json({ ok: true, song: meta });
     }
 
