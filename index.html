@@ -253,6 +253,50 @@
             color:#c2889f;
             text-align:center;
         }
+        .upload-section{
+            max-width:600px;
+            margin:0 auto 30px;
+        }
+        .upload-panel{
+            background:#fff;
+            border-radius:14px;
+            box-shadow:0 3px 12px rgba(123,65,87,0.08);
+            padding:14px 20px;
+        }
+        .upload-panel summary{
+            cursor:pointer;
+            font-size:16px;
+            color:#7b4157;
+            font-weight:bold;
+        }
+        .upload-body{
+            margin-top:14px;
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+        }
+        .upload-row{
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+        }
+        .upload-row label{
+            font-size:14px;
+            color:#b0748c;
+        }
+        .upload-row button{
+            align-self:flex-start;
+            padding:8px 20px;
+            background:#ff88aa;
+            color:#fff;
+            border:none;
+            border-radius:8px;
+            cursor:pointer;
+            font-size:14px;
+        }
+        .upload-row button:disabled{
+            opacity:0.5;
+        }
         .note-btn-row{
             margin-top:12px;
             text-align:right;
@@ -529,6 +573,7 @@
             <button class="tab-btn" data-filter="我的世界">我的世界</button>
             <button class="tab-btn" data-filter="第五人格">第五人格</button>
             <button class="tab-btn" data-filter="其他">其他</button>
+            <button class="tab-btn" data-filter="上传">我们的上传</button>
         </div>
         <div class="gallery" id="galleryBox"></div>
         <section class="note-wall">
@@ -541,6 +586,25 @@
                 <div id="noteModeTip" class="note-mode-tip">留言服务连接中…</div>
             </div>
             <div class="note-container" id="noteBox"></div>
+        </section>
+        <section class="upload-section">
+            <details class="upload-panel">
+                <summary>📁 我们的上传（照片 / 音乐）</summary>
+                <div class="upload-body">
+                    <div class="upload-row">
+                        <label>📸 上传照片（可多选，自动加入照片墙）</label>
+                        <input type="file" id="photoFiles" accept="image/*" multiple>
+                        <button id="uploadPhotoBtn">上传照片</button>
+                    </div>
+                    <div class="upload-row">
+                        <label>🎵 上传歌曲（mp3 必选，同名 .lrc 可选）</label>
+                        <input type="file" id="songFile" accept=".mp3,audio/mpeg">
+                        <input type="file" id="lrcFile" accept=".lrc,text/plain">
+                        <button id="uploadSongBtn">上传歌曲</button>
+                    </div>
+                    <div id="uploadTip" class="note-mode-tip"></div>
+                </div>
+            </details>
         </section>
         <div class="words">
             ✨ 写给我们：<br>
@@ -637,6 +701,9 @@
         function escHtml(s){
             return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
         }
+        let uploadedPhotos = []; // 服务器上传的照片
+        let uploadedSongs = [];  // 服务器上传的歌曲
+        function getSongs(){ return songList.concat(uploadedSongs); }
 
         //歌词全局
         let lyricLines = [];
@@ -772,7 +839,8 @@
         function renderGallery(filterKey){
             const galleryBox = document.getElementById('galleryBox');
             galleryBox.innerHTML = "";
-            let showList = filterKey === "all" ? [...photoData] : photoData.filter(p=> p.tags.includes(filterKey));
+            const allPhotos = photoData.concat(uploadedPhotos);
+            let showList = filterKey === "all" ? [...allPhotos] : allPhotos.filter(p=> p.tags.includes(filterKey));
             showList.forEach((photo,idx)=>{
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'gallery-item';
@@ -813,6 +881,80 @@
         })
         renderGallery(currentFilter);
         renderAllNotes();
+
+        // ========== 照片/音乐上传（EdgeOne 版生效，静态托管自动忽略）==========
+        ;(async function loadUploads(){
+            try{
+                const [pres, sres] = await Promise.all([fetch("api/photos"), fetch("api/songs")]);
+                if(pres.ok){
+                    const d = await pres.json();
+                    if(d && d.ok && Array.isArray(d.photos)){
+                        uploadedPhotos = d.photos.map(p=>({src:"api/photos?id="+p.id, tags:["上传"]}));
+                        renderGallery(currentFilter);
+                    }
+                }
+                if(sres.ok){
+                    const d = await sres.json();
+                    if(d && d.ok && Array.isArray(d.songs)){
+                        uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc}));
+                    }
+                }
+            }catch(e){ /* 无上传服务时保持原状 */ }
+        })();
+
+        document.getElementById("uploadPhotoBtn").onclick = async function(){
+            const input = document.getElementById("photoFiles");
+            const tip = document.getElementById("uploadTip");
+            if(!input.files || input.files.length === 0){ tip.textContent = "请先选择照片"; return; }
+            const btn = this;
+            btn.disabled = true;
+            tip.textContent = "照片上传中…";
+            try{
+                const fd = new FormData();
+                for(const f of input.files){ fd.append("files", f); }
+                const res = await fetch("api/photos", { method:"POST", body: fd });
+                const d = await res.json();
+                if(res.ok && d.ok && Array.isArray(d.saved)){
+                    for(const p of d.saved){ uploadedPhotos.push({src:"api/photos?id="+p.id, tags:["上传"]}); }
+                    renderGallery(currentFilter);
+                    input.value = "";
+                    tip.textContent = "✅ 上传成功，照片已加入照片墙";
+                }else{
+                    tip.textContent = "上传失败：" + (d && d.error ? d.error : res.status);
+                }
+            }catch(e){
+                tip.textContent = "上传失败：此入口仅在 EdgeOne 版可用";
+            }
+            btn.disabled = false;
+        };
+
+        document.getElementById("uploadSongBtn").onclick = async function(){
+            const sf = document.getElementById("songFile");
+            const lf = document.getElementById("lrcFile");
+            const tip = document.getElementById("uploadTip");
+            if(!sf.files || sf.files.length === 0){ tip.textContent = "请先选择 mp3 文件"; return; }
+            const btn = this;
+            btn.disabled = true;
+            tip.textContent = "歌曲上传中…（文件较大请稍等）";
+            try{
+                const fd = new FormData();
+                fd.append("mp3", sf.files[0]);
+                if(lf.files && lf.files.length > 0){ fd.append("lrc", lf.files[0]); }
+                const res = await fetch("api/songs", { method:"POST", body: fd });
+                const d = await res.json();
+                if(res.ok && d.ok && d.song){
+                    uploadedSongs.push({remote:true, id:d.song.id, showName:d.song.name, hasLrc:!!d.song.hasLrc});
+                    sf.value = "";
+                    lf.value = "";
+                    tip.textContent = "✅ 上传成功，点下一首即可播放新歌";
+                }else{
+                    tip.textContent = "上传失败：" + (d && d.error ? d.error : res.status);
+                }
+            }catch(e){
+                tip.textContent = "上传失败：此入口仅在 EdgeOne 版可用";
+            }
+            btn.disabled = false;
+        };
 
         // 爱心跟随特效（鼠标 + 触摸）
         function spawnHeart(x,y){
@@ -862,7 +1004,7 @@
                 return;
             }
             try{
-                const resp = await fetch("music/"+lrcFileName);
+                const resp = await fetch(lrcFileName.indexOf("api/") === 0 ? lrcFileName : ("music/" + lrcFileName));
                 if(!resp.ok) throw new Error("not found");
                 const lrcText = await resp.text();
                 lyricLines = parseLrc(lrcText);
@@ -1015,10 +1157,16 @@
         music.volume = volumeSlider.value;
 
         function loadSong(index){
-            const song = songList[index];
+            const song = getSongs()[index];
             activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : 0.5;
             activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : 1;
             activeLrcCalib = Array.isArray(song.lrcCalib) ? song.lrcCalib : null;
+            if(song.remote){
+                currentMusicSrc = "api/songs?file=" + song.id;
+                music.src = currentMusicSrc;
+                loadLyric(song.hasLrc ? ("api/songs?lrc=" + song.id) : "");
+                return;
+            }
             currentMusicSrc = MUSIC_CDN_BASE ? (MUSIC_CDN_BASE + "/" + song.filePath) : ("music/" + song.filePath);
             music.src = currentMusicSrc;
             loadLyric(song.lrcPath);
@@ -1027,8 +1175,8 @@
 
         // COS加速源加载失败时，自动回退到仓库本地音乐
         music.addEventListener("error", function(){
-            const song = songList[currentSongIndex];
-            if(!song) return;
+            const song = getSongs()[currentSongIndex];
+            if(!song || song.remote) return;
             const localSrc = "music/" + song.filePath;
             if(currentMusicSrc !== localSrc){
                 currentMusicSrc = localSrc;
@@ -1050,21 +1198,21 @@
         }
         prevBtn.onclick = ()=>{
             currentSongIndex--;
-            if(currentSongIndex < 0) currentSongIndex = songList.length -1;
+            if(currentSongIndex < 0) currentSongIndex = getSongs().length -1;
             loadSong(currentSongIndex);
             music.play().catch(e=>{});
             musicBtn.innerText = "⏸";
         }
         nextBtn.onclick = ()=>{
             currentSongIndex++;
-            if(currentSongIndex >= songList.length) currentSongIndex = 0;
+            if(currentSongIndex >= getSongs().length) currentSongIndex = 0;
             loadSong(currentSongIndex);
             music.play().catch(e=>{});
             musicBtn.innerText = "⏸";
         }
         music.onended = function(){
             currentSongIndex++;
-            if(currentSongIndex >= songList.length) currentSongIndex = 0;
+            if(currentSongIndex >= getSongs().length) currentSongIndex = 0;
             loadSong(currentSongIndex);
             music.play().catch(e=>{});
             musicBtn.innerText = "⏸";
