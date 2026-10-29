@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>我们的小世界</title>
+    <!-- Supabase SDK：GitHub Pages 备用站的共享后端（加载失败不影响 EdgeOne 版） -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -909,9 +911,24 @@
         let currentFilter = "all";
         let userNotes = JSON.parse(localStorage.getItem("loveNotes")) || [];
 
-        // ========== 共享留言（EdgeOne 边缘函数 + KV）==========
+        // ========== 共享后端：EdgeOne 版走自家 API，GitHub Pages 版走 Supabase，都没有则本地 ==========
+        // Supabase 配置（supabase.com 项目 → Settings → API 复制这两项；保持 YOUR- 开头 = 未启用）
+        const SUPA_URL = "https://YOUR-PROJECT.supabase.co";
+        const SUPA_KEY = "YOUR-ANON-KEY";
+        let sb = null;
+        try{
+            if(typeof supabase !== "undefined" && SUPA_URL.indexOf("YOUR-") !== 0 && SUPA_KEY.indexOf("YOUR-") !== 0){
+                sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+            }
+        }catch(e){ console.warn("Supabase 初始化失败", e); }
+        // Supabase 公开桶直链
+        function supaUrl(bucket, path){
+            return SUPA_URL + "/storage/v1/object/public/" + bucket + "/" + String(path).split("/").map(encodeURIComponent).join("/");
+        }
+
         let serverNotes = [];   // 服务器上的共享留言
         let serverMode = false; // true = 已连接共享留言接口
+        let backendMode = "local"; // "edgeone" | "supabase" | "local"
         function escHtml(s){
             return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
         }
@@ -926,7 +943,7 @@
             if(!pw || !sw) return;
             pw.innerHTML = "";
             uploadedPhotos.forEach(function(p, idx){
-                const id = String(p.src).split("id=")[1] || "";
+                const id = p.id || String(p.src).split("id=")[1] || "";
                 const div = document.createElement("div");
                 div.className = "manage-item";
                 const img = document.createElement("img");
@@ -940,18 +957,20 @@
                     if(!confirm("确定删除这张照片吗？")) return;
                     del.disabled = true;
                     try{
-                        const res = await fetch("api/photos?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: id }) });
-                        const d = await res.json();
-                        if(res.ok && d.ok){
-                            uploadedPhotos.splice(idx, 1);
-                            renderGallery(currentFilter);
-                            renderManage();
+                        if(backendMode === "supabase"){
+                            const r = await sb.from("photos").delete().eq("id", id);
+                            if(r.error) throw r.error;
+                            if(p.path){ try{ await sb.storage.from("photos").remove([p.path]); }catch(e2){} }
                         }else{
-                            alert("删除失败：" + (d && d.error ? d.error : res.status));
-                            del.disabled = false;
+                            const res = await fetch("api/photos?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: id }) });
+                            const d = await res.json();
+                            if(!(res.ok && d.ok)) throw new Error((d && d.error) || res.status);
                         }
+                        uploadedPhotos.splice(idx, 1);
+                        renderGallery(currentFilter);
+                        renderManage();
                     }catch(e){
-                        alert("删除失败：此入口仅在 EdgeOne 版可用");
+                        alert("删除失败：" + (e.message || "网络错误"));
                         del.disabled = false;
                     }
                 };
@@ -974,26 +993,28 @@
                     if(!confirm("确定删除这首歌吗？")) return;
                     del.disabled = true;
                     try{
-                        const res = await fetch("api/songs?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: s.id }) });
-                        const d = await res.json();
-                        if(res.ok && d.ok){
-                            const gi = songList.length + idx;
-                            uploadedSongs.splice(idx, 1);
-                            if(currentSongIndex === gi){
-                                music.pause();
-                                currentSongIndex = 0;
-                                loadSong(0);
-                                musicBtn.innerText = "▶";
-                            }else if(currentSongIndex > gi){
-                                currentSongIndex--;
-                            }
-                            renderManage();
+                        if(backendMode === "supabase"){
+                            const r = await sb.from("songs").delete().eq("id", s.id);
+                            if(r.error) throw r.error;
+                            if(s.path){ try{ await sb.storage.from("songs").remove([s.path]); }catch(e2){} }
                         }else{
-                            alert("删除失败：" + (d && d.error ? d.error : res.status));
-                            del.disabled = false;
+                            const res = await fetch("api/songs?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: s.id }) });
+                            const d = await res.json();
+                            if(!(res.ok && d.ok)) throw new Error((d && d.error) || res.status);
                         }
+                        const gi = songList.length + idx;
+                        uploadedSongs.splice(idx, 1);
+                        if(currentSongIndex === gi){
+                            music.pause();
+                            currentSongIndex = 0;
+                            loadSong(0);
+                            musicBtn.innerText = "▶";
+                        }else if(currentSongIndex > gi){
+                            currentSongIndex--;
+                        }
+                        renderManage();
                     }catch(e){
-                        alert("删除失败：此入口仅在 EdgeOne 版可用");
+                        alert("删除失败：" + (e.message || "网络错误"));
                         del.disabled = false;
                     }
                 };
@@ -1093,17 +1114,18 @@
                         if(!confirm("确定删除这条留言吗？")) return;
                         el.style.opacity = "0.3";
                         try{
-                            const res = await fetch("api/notes?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: id }) });
-                            const d = await res.json();
-                            if(res.ok && d.ok){
-                                serverNotes = serverNotes.filter(n => n.id !== id);
-                                renderAllNotes();
+                            if(backendMode === "supabase"){
+                                const r = await sb.from("notes").delete().eq("id", id);
+                                if(r.error) throw r.error;
                             }else{
-                                alert("删除失败：" + (d && d.error ? d.error : res.status));
-                                el.style.opacity = "";
+                                const res = await fetch("api/notes?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: id }) });
+                                const d = await res.json();
+                                if(!(res.ok && d.ok)) throw new Error((d && d.error) || res.status);
                             }
+                            serverNotes = serverNotes.filter(n => n.id !== id);
+                            renderAllNotes();
                         }catch(e){
-                            alert("删除失败：此入口仅在 EdgeOne 版可用");
+                            alert("删除失败：" + (e.message || "网络错误"));
                             el.style.opacity = "";
                         }
                     };
@@ -1138,6 +1160,15 @@
             btn.disabled = true;
             if(serverMode){
                 try{
+                    if(backendMode === "supabase"){
+                        const r = await sb.from("notes").insert({ text: txt }).select().single();
+                        if(r.error) throw r.error;
+                        serverNotes.unshift({ id: r.data.id, text: r.data.text });
+                        renderAllNotes();
+                        textarea.value = "";
+                        btn.disabled = false;
+                        return;
+                    }
                     const res = await fetch("api/notes", {
                         method: "POST",
                         headers: {"content-type": "application/json"},
@@ -1162,24 +1193,37 @@
             btn.disabled = false;
         };
 
-        // 启动时尝试连接共享留言服务（EdgeOne 环境生效，静态托管自动回退本地模式）
+        // 启动时尝试连接共享留言服务：EdgeOne 优先 → Supabase → 本地
         ;(async function loadServerNotes(){
             const tip = document.getElementById("noteModeTip");
             try{
                 const res = await fetch("api/notes");
-                if(!res.ok) throw new Error("bad status");
-                const data = await res.json();
-                if(data && data.ok && Array.isArray(data.notes)){
-                    serverNotes = data.notes;
-                    serverMode = true;
-                    if(tip) tip.textContent = "💬 共享留言模式：TA 也能看到你写的留言";
-                    renderAllNotes();
-                    return;
+                if(res.ok){
+                    const data = await res.json();
+                    if(data && data.ok && Array.isArray(data.notes)){
+                        serverNotes = data.notes;
+                        serverMode = true;
+                        backendMode = "edgeone";
+                        if(tip) tip.textContent = "💬 共享留言模式：TA 也能看到你写的留言";
+                        renderAllNotes();
+                        return;
+                    }
                 }
-                throw new Error("bad payload");
-            }catch(e){
-                if(tip) tip.textContent = "当前为本地留言模式（仅本机可见）";
+            }catch(e){ /* EdgeOne 不可用，尝试 Supabase */ }
+            if(sb){
+                try{
+                    const r = await sb.from("notes").select("id,text").order("created_at", { ascending: false });
+                    if(!r.error && r.data){
+                        backendMode = "supabase";
+                        serverMode = true;
+                        serverNotes = r.data.map(n=>({ id: n.id, text: n.text }));
+                        if(tip) tip.textContent = "💬 共享留言模式：TA 也能看到你写的留言";
+                        renderAllNotes();
+                        return;
+                    }
+                }catch(e2){}
             }
+            if(tip) tip.textContent = "当前为本地留言模式（仅本机可见）";
         })();
         // ========== 修复天数计算 ==========
         function calcDay() {
@@ -1240,13 +1284,14 @@
         renderGallery(currentFilter);
         renderAllNotes();
 
-        // ========== 照片/音乐上传（EdgeOne 版生效，静态托管自动忽略）==========
+        // ========== 照片/音乐上传：EdgeOne 优先 → Supabase → 本地 ==========
         ;(async function loadUploads(){
             try{
                 const [pres, sres] = await Promise.all([fetch("api/photos"), fetch("api/songs")]);
                 if(pres.ok){
                     const d = await pres.json();
                     if(d && d.ok && Array.isArray(d.photos)){
+                        backendMode = "edgeone";
                         uploadedPhotos = d.photos.map(p=>({src:"api/photos?id="+p.id, tags:["上传"]}));
                         renderGallery(currentFilter);
                     }
@@ -1258,7 +1303,23 @@
                     }
                 }
                 renderManage();
-            }catch(e){ /* 无上传服务时保持原状 */ }
+                return;
+            }catch(e){ /* EdgeOne 不可用，尝试 Supabase */ }
+            if(sb){
+                try{
+                    backendMode = "supabase";
+                    const pr = await sb.from("photos").select("id,path").order("created_at", { ascending: true });
+                    if(!pr.error && pr.data){
+                        uploadedPhotos = pr.data.map(p=>({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传"] }));
+                        renderGallery(currentFilter);
+                    }
+                    const sr = await sb.from("songs").select("id,name,path,lrc").order("created_at", { ascending: true });
+                    if(!sr.error && sr.data){
+                        uploadedSongs = sr.data.map(s=>({ remote:true, id:s.id, showName:s.name, hasLrc:!!s.lrc, lrcText:s.lrc || "", src: supaUrl("songs", s.path) }));
+                    }
+                    renderManage();
+                }catch(e2){ /* Supabase 也不可用，保持本地 */ }
+            }
         })();
 
         document.getElementById("uploadPhotoBtn").onclick = async function(){
@@ -1270,6 +1331,33 @@
             btn.disabled = true;
             const saved = [];
             let failMsg = "";
+            if(backendMode === "supabase"){
+                for(let i = 0; i < files.length; i++){
+                    const raw = files[i];
+                    const f = await compressImage(raw);
+                    if(f.size > 10 * 1024 * 1024){ failMsg = "「" + raw.name + "」超过10MB已跳过"; continue; }
+                    tip.textContent = "照片上传中 (" + (i + 1) + "/" + files.length + ")：" + raw.name;
+                    try{
+                        const ext = ((f.name.match(/\.(\w+)$/) || [])[1] || "jpg").toLowerCase();
+                        const path = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+                        const up = await sb.storage.from("photos").upload(path, f, { contentType: f.type || "image/jpeg" });
+                        if(up.error) throw up.error;
+                        const ins = await sb.from("photos").insert({ path: path }).select().single();
+                        if(ins.error) throw ins.error;
+                        saved.push({ id: ins.data.id, path: path });
+                    }catch(e){ failMsg = "「" + f.name + "」上传失败：" + (e.message || "网络错误"); }
+                }
+                if(saved.length > 0){
+                    for(const p of saved){ uploadedPhotos.push({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传"] }); }
+                    renderGallery(currentFilter);
+                    renderManage();
+                    input.value = "";
+                }
+                if(failMsg){ tip.textContent = failMsg + (saved.length > 0 ? "（其余 " + saved.length + " 张已成功）" : ""); }
+                else{ tip.textContent = "✅ 上传成功 " + saved.length + " 张，照片已加入照片墙"; }
+                btn.disabled = false;
+                return;
+            }
             for(let i = 0; i < files.length; i++){
                 const raw = files[i];
                 const f = await compressImage(raw);
@@ -1308,6 +1396,28 @@
             const f = sf.files[0];
             const btn = this;
             btn.disabled = true;
+            if(backendMode === "supabase"){
+                try{
+                    if(f.size > 50 * 1024 * 1024) throw new Error("Supabase 免费版单文件上限 50MB");
+                    tip.textContent = "歌曲上传中…请稍等";
+                    const path = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".mp3";
+                    const up = await sb.storage.from("songs").upload(path, f, { contentType: "audio/mpeg" });
+                    if(up.error) throw up.error;
+                    let lrcText = null;
+                    if(lf.files && lf.files.length > 0){ lrcText = await lf.files[0].text(); }
+                    const ins = await sb.from("songs").insert({ name: f.name, path: path, lrc: lrcText }).select().single();
+                    if(ins.error) throw ins.error;
+                    uploadedSongs.push({ remote:true, id:ins.data.id, showName:ins.data.name, hasLrc:!!ins.data.lrc, lrcText:ins.data.lrc || "", src: supaUrl("songs", path) });
+                    renderManage();
+                    sf.value = "";
+                    lf.value = "";
+                    tip.textContent = "✅ 上传成功，点下一首即可播放新歌";
+                }catch(e){
+                    tip.textContent = "上传失败：" + (e.message || "网络错误");
+                }
+                btn.disabled = false;
+                return;
+            }
             try{
                 // 分块直传：函数读不回 >1MB 的对象，所以把 mp3 切成 768KB 小块逐块上传，播放时按需拼接
                 const CHUNK = 786432;
@@ -1383,6 +1493,14 @@
             lyricCurDom.textContent = "";
             lyricNext2Dom.textContent = "";
         }
+        function loadLyricText(lrcText){
+            lyricLines = parseLrc(lrcText || "");
+            if(lyricLines.length ===0){
+                setBarMsg("暂无歌词");
+            }else{
+                setBarMsg(lyricLines[0].text || "等待播放");
+            }
+        }
         async function loadLyric(lrcFileName){
             lyricLines = [];
             setBarMsg("加载歌词…");
@@ -1393,13 +1511,7 @@
             try{
                 const resp = await fetch(lrcFileName.indexOf("api/") === 0 ? lrcFileName : ("music/" + lrcFileName));
                 if(!resp.ok) throw new Error("not found");
-                const lrcText = await resp.text();
-                lyricLines = parseLrc(lrcText);
-                if(lyricLines.length ===0){
-                    setBarMsg("暂无歌词");
-                }else{
-                    setBarMsg(lyricLines[0].text || "等待播放");
-                }
+                loadLyricText(await resp.text());
             }catch(err){
                 setBarMsg("歌词加载失败");
             }
@@ -1614,7 +1726,8 @@
             if(song.remote){
                 currentMusicSrc = song.src || ("api/songs?file=" + song.id);
                 music.src = currentMusicSrc;
-                loadLyric(song.hasLrc ? ("api/songs?lrc=" + song.id) : "");
+                if(song.lrcText){ loadLyricText(song.lrcText); }
+                else{ loadLyric(song.hasLrc ? ("api/songs?lrc=" + song.id) : ""); }
                 return;
             }
             currentMusicSrc = MUSIC_CDN_BASE ? (MUSIC_CDN_BASE + "/" + song.filePath) : ("music/" + song.filePath);
