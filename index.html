@@ -1324,18 +1324,21 @@
             if(!sb && sbReady){ try{ await sbReady; }catch(e2){} }
             if(sb){
                 try{
-                    backendMode = "supabase";
+                    let supaOk = false;
                     const pr = await sb.from("photos").select("id,path").order("created_at", { ascending: true });
                     if(!pr.error && pr.data){
+                        supaOk = true;
                         uploadedPhotos = pr.data.map(p=>({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传"] }));
                         renderGallery(currentFilter);
                     }
                     const sr = await sb.from("songs").select("id,name,path,lrc").order("created_at", { ascending: true });
                     if(!sr.error && sr.data){
+                        supaOk = true;
                         uploadedSongs = sr.data.map(s=>({ remote:true, id:s.id, showName:s.name, hasLrc:!!s.lrc, lrcText:s.lrc || "", src: supaUrl("songs", s.path) }));
                     }
-                    renderManage();
-                }catch(e2){ /* Supabase 也不可用，保持本地 */ }
+                    // 至少一个表查询成功才认定 Supabase 可用，网络不通时保持本地模式
+                    if(supaOk){ backendMode = "supabase"; renderManage(); }
+                }catch(e2){ /* Supabase 网络不通，保持本地 */ }
             }
         })();
 
@@ -1362,7 +1365,10 @@
                         const ins = await sb.from("photos").insert({ path: path }).select().single();
                         if(ins.error) throw ins.error;
                         saved.push({ id: ins.data.id, path: path });
-                    }catch(e){ failMsg = "「" + f.name + "」上传失败：" + (e.message || "网络错误"); }
+                    }catch(e){
+                        const msg = (e && e.message === "Failed to fetch") ? "连不上 Supabase 服务器（国内网络可能被拦截，需开代理后再试）" : (e.message || "网络错误");
+                        failMsg = "「" + f.name + "」上传失败：" + msg;
+                    }
                 }
                 if(saved.length > 0){
                     for(const p of saved){ uploadedPhotos.push({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传"] }); }
@@ -1430,7 +1436,7 @@
                     lf.value = "";
                     tip.textContent = "✅ 上传成功，点下一首即可播放新歌";
                 }catch(e){
-                    tip.textContent = "上传失败：" + (e.message || "网络错误");
+                    tip.textContent = "上传失败：" + ((e && e.message === "Failed to fetch") ? "连不上 Supabase 服务器（国内网络可能被拦截，需开代理后再试）" : (e.message || "网络错误"));
                 }
                 btn.disabled = false;
                 return;
