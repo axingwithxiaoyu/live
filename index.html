@@ -565,6 +565,17 @@
             color:#e0447f;
             font-weight:bold;
         }
+        /* 三行模式：大字当前句居中，上排变回暗色的前一句 */
+        .audio-panel.lyric-bar-mode.three-line .lyric-prev{
+            font-size:15px;
+            color:#a87389;
+            font-weight:normal;
+        }
+        .audio-panel.lyric-bar-mode.three-line .lyric-cur{
+            font-size:18px;
+            color:#e0447f;
+            font-weight:bold;
+        }
         /* 悬浮窗高度不足时自动缩减为一行 */
         .audio-panel.lyric-bar-mode.one-line .lyric-prev{
             display:none;
@@ -1427,20 +1438,32 @@
             }
             if(activeIndex === lastLyricIdx) return;
             lastLyricIdx = activeIndex;
-            // 双行/三行：上排=正在播放（高亮），下面依次显示下一句、下下句（暗色），换句时整体上滑
-            lyricPrevDom.textContent = lyricLines[activeIndex].text || " ";
-            lyricCurDom.textContent = activeIndex + 1 < lyricLines.length ? (lyricLines[activeIndex + 1].text || " ") : " ";
-            lyricNext2Dom.textContent = activeIndex + 2 < lyricLines.length ? (lyricLines[activeIndex + 2].text || " ") : " ";
+            const nextText = i => (i < lyricLines.length ? (lyricLines[i].text || " ") : " ");
+            if(barLineCount === 3){
+                // 三行模式：大字当前句居中，上排=前一句，下排=下一句
+                lyricPrevDom.textContent = nextText(activeIndex - 1);
+                lyricCurDom.textContent = nextText(activeIndex);
+                lyricNext2Dom.textContent = nextText(activeIndex + 1);
+            }else{
+                // 一/两行模式：大字当前句在最上排，下面依次往后排
+                lyricPrevDom.textContent = nextText(activeIndex);
+                lyricCurDom.textContent = nextText(activeIndex + 1);
+                lyricNext2Dom.textContent = nextText(activeIndex + 2);
+            }
             singleLyricDom.classList.remove("slide");
             void singleLyricDom.offsetWidth;
             singleLyricDom.classList.add("slide");
         }
         // 歌词行数随悬浮窗高度自适应：<78px 一行，>=110px 三行，其余两行
+        let barLineCount = 2;
         function syncBarLines(){
             if(!isLyricBarMode) return;
             const h = audioPanel.offsetHeight;
-            audioPanel.classList.toggle("one-line", h < 78);
-            audioPanel.classList.toggle("three-line", h >= 110);
+            const count = h < 78 ? 1 : (h >= 110 ? 3 : 2);
+            if(count !== barLineCount){ lastLyricIdx = -1; } // 行数变化时强制刷新歌词排版
+            barLineCount = count;
+            audioPanel.classList.toggle("one-line", count === 1);
+            audioPanel.classList.toggle("three-line", count === 3);
         }
         // ⛶ 恢复按钮：仅当面板有自定义大小/位置时显示（默认大小无需恢复）
         function syncAdaptBtn(){
