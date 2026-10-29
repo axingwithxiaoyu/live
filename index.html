@@ -486,13 +486,38 @@
             opacity:1 !important;
             background:#ffd6e4;
         }
+        /* 恢复默认适配按钮（右上角，重置大小/位置/行数，保留当前模式） */
+        .adapt-icon{
+            position:absolute;
+            top:1px;
+            right:18px;
+            width:16px;
+            height:16px;
+            font-size:9px;
+            border-radius:50%;
+            opacity:0;
+            background:#fff;
+            transition: opacity 0.2s ease;
+            z-index:8;
+        }
+        .audio-panel:hover .adapt-icon{
+            opacity:0.7;
+        }
+        .adapt-icon:hover{
+            opacity:1 !important;
+            background:#ffd6e4;
+        }
+        /* 歌词条模式下常显低透明度，方便手机直接点按 */
+        .audio-panel.lyric-bar-mode .adapt-icon{
+            opacity:0.5;
+        }
 
         /* ====== QQ音乐桌面歌词长条模式（PC+手机全部可用） ====== */
         .audio-panel.lyric-bar-mode{
             flex-direction:row;
             align-items:center;
             width:480px;
-            height:56px;
+            height:84px;
             padding:0 14px;
             background:rgba(255,230,238,0.55);
             backdrop-filter: blur(8px);
@@ -774,6 +799,7 @@
     <!-- 音频面板：第一行播放按键，第二行音量+词按钮 -->
     <div class="audio-panel" id="audioPanel">
         <button class="audio-icon reset-icon" id="resetPanelBtn" title="恢复初始悬浮窗">⟲</button>
+        <button class="audio-icon adapt-icon" id="adaptBtn" title="恢复默认适配（两行歌词）">⛶</button>
         <div class="btn-row">
             <button class="audio-icon" id="prevBtn" title="上一首">⏮</button>
             <button class="audio-icon play-main" id="musicBtn" title="播放/暂停">▶</button>
@@ -1420,10 +1446,22 @@
             audioPanel.style.height = "";
             audioPanel.classList.remove("lyric-bar-mode");
             isLyricBarMode = false;
+            syncBarLines();
         }
         document.getElementById("resetPanelBtn").onclick = function(e){
             e.stopPropagation();
             resetPanel();
+        }
+        // 恢复默认适配：清除自定义大小/位置（保留当前模式），歌词条回到默认两行
+        document.getElementById("adaptBtn").onclick = function(e){
+            e.stopPropagation();
+            audioPanel.style.left = "";
+            audioPanel.style.top = "";
+            audioPanel.style.right = "20px";
+            audioPanel.style.width = "";
+            audioPanel.style.height = "";
+            localStorage.removeItem("audioPanelPosSize");
+            syncBarLines();
         }
 
         function savePanelPosSize(){
@@ -1472,7 +1510,8 @@
                 let dw = e.clientX - resizeStartX;
                 let dh = e.clientY - resizeStartY;
                 let newW = Math.max(MIN_W, resizeStartW + dw);
-                let newH = Math.max(MIN_H, resizeStartH + dh);
+                // 歌词条模式允许拖得更矮（矮于78px自动缩成一行歌词）
+                let newH = Math.max(isLyricBarMode ? 48 : MIN_H, resizeStartH + dh);
                 newW = Math.min(newW, window.innerWidth-20);
                 newH = Math.min(newH, window.innerHeight-20);
                 audioPanel.style.width = newW + "px";
