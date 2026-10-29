@@ -1177,7 +1177,9 @@
             const sw = document.getElementById("manageSongs");
             if(!pw || !sw) return;
             pw.innerHTML = "";
-            uploadedPhotos.forEach(function(p, idx){
+            // 最新的照片排最前
+            const sortedPhotos = uploadedPhotos.slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+            sortedPhotos.forEach(function(p){
                 const id = p.id || String(p.src).split("id=")[1] || "";
                 const div = document.createElement("div");
                 div.className = "manage-item";
@@ -1201,7 +1203,8 @@
                             const d = await res.json();
                             if(!(res.ok && d.ok)) throw new Error((d && d.error) || res.status);
                         }
-                        uploadedPhotos.splice(idx, 1);
+                        const pi = uploadedPhotos.indexOf(p);
+                        if(pi >= 0) uploadedPhotos.splice(pi, 1);
                         renderGallery(currentFilter);
                         renderManage();
                     }catch(e){
@@ -1214,7 +1217,9 @@
                 pw.appendChild(div);
             });
             sw.innerHTML = "";
-            uploadedSongs.forEach(function(s, idx){
+            // 最新的歌曲排最前
+            const sortedSongs = uploadedSongs.slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+            sortedSongs.forEach(function(s){
                 const div = document.createElement("div");
                 div.className = "manage-song";
                 const name = document.createElement("span");
@@ -1237,8 +1242,9 @@
                             const d = await res.json();
                             if(!(res.ok && d.ok)) throw new Error((d && d.error) || res.status);
                         }
-                        const gi = songList.length + idx;
-                        uploadedSongs.splice(idx, 1);
+                        const si = uploadedSongs.indexOf(s);
+                        const gi = songList.length + si;
+                        uploadedSongs.splice(si, 1);
                         if(currentSongIndex === gi){
                             music.pause();
                             currentSongIndex = 0;
@@ -1627,7 +1633,8 @@
         function renderGallery(filterKey){
             const galleryBox = document.getElementById('galleryBox');
             galleryBox.innerHTML = "";
-            const allPhotos = photoData.concat(uploadedPhotos);
+            const sortedUploads = uploadedPhotos.slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+            const allPhotos = sortedUploads.concat(photoData);
             const WEEK = 7 * 24 * 60 * 60 * 1000;
             let showList;
             if(filterKey === "上传"){
@@ -1695,7 +1702,7 @@
                     const d = await sres.json();
                     if(d && d.ok && Array.isArray(d.songs)){
                         edgeoneOk = true;
-                        uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc, src: s.file ? (MUSIC_CDN_BASE + "/" + encodeURIComponent(s.file)) : ("api/songs?file=" + s.id)}));
+                        uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc, ts: s.ts || 0, src: s.file ? (MUSIC_CDN_BASE + "/" + encodeURIComponent(s.file)) : ("api/songs?file=" + s.id)}));
                     }
                 }
                 if(edgeoneOk){ renderManage(); return; }
@@ -1714,10 +1721,10 @@
                         });
                         renderGallery(currentFilter);
                     }
-                    const sr = await sb.from("songs").select("id,name,path,lrc").order("created_at", { ascending: true });
+                    const sr = await sb.from("songs").select("id,name,path,lrc,created_at").order("created_at", { ascending: true });
                     if(!sr.error && sr.data){
                         supaOk = true;
-                        uploadedSongs = sr.data.map(s=>({ remote:true, id:s.id, showName:s.name, hasLrc:!!s.lrc, lrcText:s.lrc || "", src: supaUrl("songs", s.path) }));
+                        uploadedSongs = sr.data.map(s=>({ remote:true, id:s.id, showName:s.name, hasLrc:!!s.lrc, lrcText:s.lrc || "", ts: s.created_at ? new Date(s.created_at).getTime() : 0, src: supaUrl("songs", s.path) }));
                     }
                     // 至少一个表查询成功才认定 Supabase 可用，网络不通时保持本地模式
                     if(supaOk){ backendMode = "supabase"; renderManage(); }
