@@ -2000,6 +2000,18 @@
             audioPanel.classList.toggle("adapt-visible", !!custom && !isLyricBarMode);
         }
 
+        // 尺寸变化后把面板钳回屏幕可视范围（防止切换歌词条后右侧/底部超出屏幕）
+        function clampPanelIntoView(){
+            const rect = audioPanel.getBoundingClientRect();
+            const maxLeft = Math.max(0, window.innerWidth - rect.width);
+            const maxTop = Math.max(0, window.innerHeight - rect.height);
+            if(rect.left > maxLeft || rect.top > maxTop || rect.left < 0 || rect.top < 0){
+                audioPanel.style.left = Math.min(Math.max(rect.left, 0), maxLeft) + "px";
+                audioPanel.style.top = Math.min(Math.max(rect.top, 0), maxTop) + "px";
+                audioPanel.style.right = "auto";
+            }
+        }
+
         function restorePanelPos(){
             const saved = JSON.parse(localStorage.getItem("audioPanelPosSize")||'{}');
             if(typeof saved.left === "number" && typeof saved.top === "number"){
@@ -2014,6 +2026,7 @@
                 audioPanel.classList.add("lyric-bar-mode");
             }
             syncBarLines();
+            clampPanelIntoView();
             syncAdaptBtn();
         }
         restorePanelPos();
@@ -2119,13 +2132,22 @@
 
         lyricToggleBtn.onclick = function(){
             isLyricBarMode = !isLyricBarMode;
+            // 切换瞬间完成布局变化：关掉过渡动画避免中间态错位；
+            // 清掉 inline 宽高，防止普通面板的旧尺寸覆盖歌词条默认 480×84（窄条截字问题）
+            const oldTransition = audioPanel.style.transition;
+            audioPanel.style.transition = "none";
             if(isLyricBarMode){
                 audioPanel.classList.add("lyric-bar-mode");
-                syncBarLines();
             }else{
                 hideBarControls();
                 audioPanel.classList.remove("lyric-bar-mode");
             }
+            audioPanel.style.width = "";
+            audioPanel.style.height = "";
+            clampPanelIntoView();
+            syncBarLines();
+            void audioPanel.offsetWidth; // 强制回流，让"无过渡"先生效
+            audioPanel.style.transition = oldTransition;
             savePanelPosSize();
             syncAdaptBtn();
         }
