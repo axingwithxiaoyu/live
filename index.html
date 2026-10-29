@@ -247,23 +247,6 @@
             resize:vertical;
             font-size:15px;
         }
-        #noteName{
-            width:100%;
-            padding:10px 12px;
-            margin-bottom:10px;
-            border:1px solid #ffd6e4;
-            border-radius:8px;
-            font-size:14px;
-            box-sizing:border-box;
-            outline:none;
-        }
-        .note-from{
-            font-size:12px;
-            color:#b0748c;
-            text-align:right;
-            margin-top:6px;
-            opacity:0.75;
-        }
         .note-mode-tip{
             margin-top:10px;
             font-size:12px;
@@ -551,7 +534,6 @@
         <section class="note-wall">
             <h2 class="block-title">💛 留言墙</h2>
             <div class="note-input-area">
-                <input id="noteName" type="text" maxlength="20" placeholder="你的名字（可留空）">
                 <textarea id="noteTextarea" placeholder="写下你想对TA说的话…"></textarea>
                 <div class="note-btn-row">
                     <button id="addNoteBtn">添加留言</button>
@@ -698,10 +680,7 @@
                     let h = 0;
                     for(let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i)) % 997;
                     div.className = "note " + clsList[h % clsList.length];
-                    div.innerHTML = `
-                        <div class="note-text">${escHtml(item.text)}</div>
-                        <div class="note-from">—— ${escHtml(item.name || "匿名")}</div>
-                    `;
+                    div.innerHTML = `<div class="note-text">${escHtml(item.text)}</div>`;
                     noteBox.appendChild(div);
                 });
             } else {
@@ -727,7 +706,6 @@
         }
         document.getElementById("addNoteBtn").onclick = async function(){
             const textarea = document.getElementById("noteTextarea");
-            const nameInput = document.getElementById("noteName");
             const txt = textarea.value.trim();
             if(!txt) return;
             if(txt.length > 200){ alert("留言最多200字哦"); return; }
@@ -738,7 +716,7 @@
                     const res = await fetch("api/notes", {
                         method: "POST",
                         headers: {"content-type": "application/json"},
-                        body: JSON.stringify({ name: (nameInput.value || "").trim(), text: txt })
+                        body: JSON.stringify({ text: txt })
                     });
                     const data = await res.json();
                     if(res.ok && data.ok && data.note){
