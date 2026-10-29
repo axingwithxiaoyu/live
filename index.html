@@ -421,6 +421,49 @@
             gap:18px;
             justify-content:center;
         }
+        .month-group{
+            width:100%;
+        }
+        .month-head{
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            padding:6px 16px;
+            background:rgba(255,255,255,0.8);
+            border:1px solid #ffd6e4;
+            border-radius:999px;
+            color:#b0748c;
+            font-size:14px;
+            cursor:pointer;
+            user-select:none;
+            transition:0.2s;
+        }
+        .month-head:hover{
+            background:#fff;
+            color:#7b4157;
+        }
+        .month-arrow{
+            display:inline-block;
+            font-size:10px;
+            transition:transform 0.2s;
+        }
+        .month-count{
+            font-size:12px;
+            color:#c2889f;
+        }
+        .month-group.collapsed .month-arrow{
+            transform:rotate(-90deg);
+        }
+        .month-group.collapsed .month-cards{
+            display:none;
+        }
+        .month-cards{
+            display:flex;
+            flex-wrap:wrap;
+            gap:18px;
+            justify-content:flex-start;
+            margin-top:14px;
+        }
         .note{
             width:180px;
             padding:16px 14px;
@@ -1175,6 +1218,45 @@
             if(n && n.created_at){ const s = fmtNoteDate(n.created_at); if(s) return s; }
             return LEGACY_NOTE_DATE;
         }
+        // 留言所属月份（分组用）：优先显示日期字段 → 时间戳 → 兜底
+        function noteYM(n){
+            let d = null;
+            if(n && n.date){
+                const p = String(n.date).split("/");
+                if(p.length === 3) d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+            }
+            if(!d && n && n.ts) d = new Date(n.ts);
+            if(!d && n && n.created_at) d = new Date(n.created_at);
+            if(!d || isNaN(d.getTime())) d = new Date(2026, 9, 29);
+            return d.getFullYear() + "年" + (d.getMonth() + 1) + "月";
+        }
+        // 按月份分组渲染留言：expand="first" 展开最前两组（服务器端新留言在前），"last" 展开最后两组（本地追加在尾部）
+        function renderGroupedNotes(list, buildCard, container, expand){
+            const groups = [];
+            const pos = {};
+            list.forEach((item, i)=>{
+                const ym = noteYM(item);
+                if(pos[ym] === undefined){ pos[ym] = groups.length; groups.push({ ym: ym, items: [] }); }
+                groups[pos[ym]].items.push({ item: item, idx: i });
+            });
+            groups.forEach((g, gi)=>{
+                const isOpen = (expand === "last") ? (gi >= groups.length - 2) : (gi < 2);
+                const groupDiv = document.createElement("div");
+                groupDiv.className = "month-group" + (isOpen ? "" : " collapsed");
+                const head = document.createElement("div");
+                head.className = "month-head";
+                head.innerHTML = '<span class="month-arrow">▼</span><span>' + escHtml(g.ym) + '</span><span class="month-count">' + g.items.length + '条</span>';
+                const cards = document.createElement("div");
+                cards.className = "month-cards";
+                g.items.forEach(w=>{
+                    cards.appendChild(buildCard(w.item, w.idx));
+                });
+                head.onclick = function(){ groupDiv.classList.toggle("collapsed"); };
+                groupDiv.appendChild(head);
+                groupDiv.appendChild(cards);
+                container.appendChild(groupDiv);
+            });
+        }
         function renderAllNotes(){
             const noteBox = document.getElementById("noteBox");
             noteBox.innerHTML = "";
@@ -1186,7 +1268,7 @@
             });
             if(serverMode){
                 const clsList = ["note-1","note-2","note-3","note-4"];
-                serverNotes.forEach(item=>{
+                renderGroupedNotes(serverNotes, function(item){
                     const div = document.createElement("div");
                     const seed = String(item.id || "");
                     let h = 0;
@@ -1197,8 +1279,8 @@
                         <div class="note-text">${escHtml(item.text)}</div>
                         <div class="note-date">${escHtml(noteDateStr(item))}</div>
                     `;
-                    noteBox.appendChild(div);
-                });
+                    return div;
+                }, noteBox, "first");
                 document.querySelectorAll(".note-del-server").forEach(el=>{
                     el.onclick = async function(){
                         const id = el.getAttribute("data-id");
@@ -1222,7 +1304,7 @@
                     };
                 });
             } else {
-                userNotes.forEach((item,idx)=>{
+                renderGroupedNotes(userNotes, function(item, idx){
                     const div = document.createElement("div");
                     div.className = "note " + item.cls;
                     div.innerHTML = `
@@ -1230,8 +1312,8 @@
                         <div class="note-text">${escHtml(item.content)}</div>
                         <div class="note-date">${escHtml(item.date || LEGACY_NOTE_DATE)}</div>
                     `;
-                    noteBox.appendChild(div);
-                })
+                    return div;
+                }, noteBox, "last");
                 document.querySelectorAll(".note-del").forEach(el=>{
                     el.onclick = function(e){
                         e.stopPropagation();
