@@ -668,13 +668,10 @@
                         <button id="uploadPhotoBtn">上传照片</button>
                     </div>
                     <div class="upload-row">
-                        <label>🎵 添加歌曲（mp3 先手动传到腾讯云 COS 桶，再在这里登记）</label>
-                        <input type="text" id="songName" placeholder="歌曲名（选填，默认用文件名）">
-                        <input type="text" id="songKey" placeholder="桶里的文件名，如：蓝心羽-突然一场雨.mp3">
-                        <label style="font-size:12px;">歌词文件 .lrc（可选，选了就会同步显示）</label>
+                        <label>🎵 上传歌曲（mp3 必选，同名 .lrc 可选）</label>
+                        <input type="file" id="songFile" accept=".mp3,audio/mpeg">
                         <input type="file" id="lrcFile" accept=".lrc,text/plain">
-                        <button id="addSongBtn">添加歌曲</button>
-                        <div class="manage-title" style="margin:0;">步骤：腾讯云控制台 → 对象存储 COS → 桶 live-music-1517594007 → 上传文件（和 bg1/bg2/bg3 一样的操作）→ 回来填文件名</div>
+                        <button id="uploadSongBtn">上传歌曲</button>
                     </div>
                     <div class="upload-manage">
                         <div class="manage-title">🗂 已上传内容（点 ✕ 删除）</div>
