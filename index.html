@@ -1302,12 +1302,14 @@
 
         // ========== 照片/音乐上传：EdgeOne 优先 → Supabase → 本地 ==========
         ;(async function loadUploads(){
+            let edgeoneOk = false; // 只有 EdgeOne 接口真正成功才提前返回；静态托管返回404时必须继续走 Supabase
             try{
                 const [pres, sres] = await Promise.all([fetch("api/photos"), fetch("api/songs")]);
                 if(pres.ok){
                     const d = await pres.json();
                     if(d && d.ok && Array.isArray(d.photos)){
                         backendMode = "edgeone";
+                        edgeoneOk = true;
                         uploadedPhotos = d.photos.map(p=>({src:"api/photos?id="+p.id, tags:["上传"]}));
                         renderGallery(currentFilter);
                     }
@@ -1315,11 +1317,11 @@
                 if(sres.ok){
                     const d = await sres.json();
                     if(d && d.ok && Array.isArray(d.songs)){
+                        edgeoneOk = true;
                         uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc, src: s.file ? (MUSIC_CDN_BASE + "/" + encodeURIComponent(s.file)) : ("api/songs?file=" + s.id)}));
                     }
                 }
-                renderManage();
-                return;
+                if(edgeoneOk){ renderManage(); return; }
             }catch(e){ /* EdgeOne 不可用，尝试 Supabase */ }
             if(!sb && sbReady){ try{ await sbReady; }catch(e2){} }
             if(sb){
