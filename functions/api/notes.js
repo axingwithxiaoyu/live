@@ -61,6 +61,16 @@ export async function onRequest({ request }){
     }
 
     if(request.method === "POST"){
+        const u = new URL(request.url);
+        // mode=del：删除一条留言
+        if(u.searchParams.get("mode") === "del"){
+            let db = null;
+            try{ db = await request.json(); }catch(e){}
+            const id = String((db && db.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            try{ await store.delete("note/" + id); }catch(e){}
+            return json({ ok: true });
+        }
         let body = null;
         try { body = await request.json(); } catch(e) {}
         const name = String((body && body.name) || "").trim().slice(0, 20) || "匿名";

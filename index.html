@@ -668,10 +668,13 @@
                         <button id="uploadPhotoBtn">上传照片</button>
                     </div>
                     <div class="upload-row">
-                        <label>🎵 上传歌曲（mp3 必选，同名 .lrc 可选）</label>
-                        <input type="file" id="songFile" accept=".mp3,audio/mpeg">
+                        <label>🎵 添加歌曲（mp3 先手动传到腾讯云 COS 桶，再在这里登记）</label>
+                        <input type="text" id="songName" placeholder="歌曲名（选填，默认用文件名）">
+                        <input type="text" id="songKey" placeholder="桶里的文件名，如：蓝心羽-突然一场雨.mp3">
+                        <label style="font-size:12px;">歌词文件 .lrc（可选，选了就会同步显示）</label>
                         <input type="file" id="lrcFile" accept=".lrc,text/plain">
-                        <button id="uploadSongBtn">上传歌曲</button>
+                        <button id="addSongBtn">添加歌曲</button>
+                        <div class="manage-title" style="margin:0;">步骤：腾讯云控制台 → 对象存储 COS → 桶 live-music-1517594007 → 上传文件（和 bg1/bg2/bg3 一样的操作）→ 回来填文件名</div>
                     </div>
                     <div class="upload-manage">
                         <div class="manage-title">🗂 已上传内容（点 ✕ 删除）</div>
@@ -936,8 +939,32 @@
                     let h = 0;
                     for(let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i)) % 997;
                     div.className = "note " + clsList[h % clsList.length];
-                    div.innerHTML = `<div class="note-text">${escHtml(item.text)}</div>`;
+                    div.innerHTML = `
+                        <span class="note-del note-del-server" data-id="${escHtml(item.id)}">✕</span>
+                        <div class="note-text">${escHtml(item.text)}</div>
+                    `;
                     noteBox.appendChild(div);
+                });
+                document.querySelectorAll(".note-del-server").forEach(el=>{
+                    el.onclick = async function(){
+                        const id = el.getAttribute("data-id");
+                        if(!confirm("确定删除这条留言吗？")) return;
+                        el.style.opacity = "0.3";
+                        try{
+                            const res = await fetch("api/notes?mode=del", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: id }) });
+                            const d = await res.json();
+                            if(res.ok && d.ok){
+                                serverNotes = serverNotes.filter(n => n.id !== id);
+                                renderAllNotes();
+                            }else{
+                                alert("删除失败：" + (d && d.error ? d.error : res.status));
+                                el.style.opacity = "";
+                            }
+                        }catch(e){
+                            alert("删除失败：此入口仅在 EdgeOne 版可用");
+                            el.style.opacity = "";
+                        }
+                    };
                 });
             } else {
                 userNotes.forEach((item,idx)=>{
@@ -1085,7 +1112,7 @@
                 if(sres.ok){
                     const d = await sres.json();
                     if(d && d.ok && Array.isArray(d.songs)){
-                        uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc}));
+                        uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc, src: s.file ? (MUSIC_CDN_BASE + "/" + encodeURIComponent(s.file)) : ("api/songs?file=" + s.id)}));
                     }
                 }
                 renderManage();
@@ -1139,17 +1166,21 @@
             const f = sf.files[0];
             const btn = this;
             btn.disabled = true;
-            tip.textContent = "歌曲上传中…（文件较大请稍等）";
             try{
-                // 直传三步：init 要地址 → 浏览器 PUT 直传 → finish 登记（绕开函数 1MB 请求体限制）
+                // 分块直传：函数读不回 >1MB 的对象，所以把 mp3 切成 768KB 小块逐块上传，播放时按需拼接
+                const CHUNK = 786432;
                 const initRes = await fetch("api/songs?mode=init", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ name: f.name, size: f.size }) });
                 const init = await initRes.json();
-                if(!initRes.ok || !init.ok) throw new Error(init.error || initRes.status);
-                const putRes = await fetch(init.url, { method: "PUT", headers: { "Content-Type": "audio/mpeg" }, body: f });
-                if(!putRes.ok) throw new Error("直传失败" + putRes.status);
+                if(!initRes.ok || !init.ok || !Array.isArray(init.urls)) throw new Error(init.error || initRes.status);
+                for(let i = 0; i < init.urls.length; i++){
+                    tip.textContent = "歌曲上传中 (" + (i + 1) + "/" + init.urls.length + ")…请稍等";
+                    const blob = f.slice(i * CHUNK, Math.min(f.size, (i + 1) * CHUNK));
+                    const putRes = await fetch(init.urls[i], { method: "PUT", headers: { "Content-Type": "application/octet-stream" }, body: blob });
+                    if(!putRes.ok) throw new Error("分块直传失败" + putRes.status);
+                }
                 let lrcText = null;
                 if(lf.files && lf.files.length > 0){ lrcText = await lf.files[0].text(); }
-                const finRes = await fetch("api/songs?mode=finish", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ id: init.id, name: f.name, lrc: lrcText }) });
+                const finRes = await fetch("api/songs?mode=finish", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ id: init.id, name: f.name, size: f.size, chunks: init.urls.length, lrc: lrcText }) });
                 const fin = await finRes.json();
                 if(!finRes.ok || !fin.ok || !fin.song) throw new Error(fin.error || finRes.status);
                 uploadedSongs.push({remote:true, id:fin.song.id, showName:fin.song.name, hasLrc:!!fin.song.hasLrc});
@@ -1369,7 +1400,7 @@
             activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : 1;
             activeLrcCalib = Array.isArray(song.lrcCalib) ? song.lrcCalib : null;
             if(song.remote){
-                currentMusicSrc = "api/songs?file=" + song.id;
+                currentMusicSrc = song.src || ("api/songs?file=" + song.id);
                 music.src = currentMusicSrc;
                 loadLyric(song.hasLrc ? ("api/songs?lrc=" + song.id) : "");
                 return;
