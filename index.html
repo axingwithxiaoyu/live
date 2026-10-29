@@ -299,6 +299,35 @@
         .upload-row button:disabled{
             opacity:0.5;
         }
+        .album-pick{
+            display:flex;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:8px;
+        }
+        .album-label{
+            font-size:14px;
+            color:#b0748c;
+        }
+        .album-chip{
+            padding:5px 14px;
+            border-radius:999px;
+            border:2px solid #ffd6e4;
+            background:#fff;
+            color:#7b4157;
+            cursor:pointer;
+            font-size:13px;
+            transition:0.2s;
+        }
+        .album-chip.active{
+            background:#ff88aa;
+            color:#fff;
+            border-color:#ff88aa;
+        }
+        .album-hint{
+            font-size:12px;
+            color:#c2889f;
+        }
         .upload-manage{
             margin-top:4px;
             border-top:1px dashed #ffd6e4;
@@ -777,7 +806,7 @@
             <button class="tab-btn" data-filter="我的世界">我的世界</button>
             <button class="tab-btn" data-filter="第五人格">第五人格</button>
             <button class="tab-btn" data-filter="其他">其他</button>
-            <button class="tab-btn" data-filter="上传">我们的上传</button>
+            <button class="tab-btn" data-filter="上传">最近上传</button>
         </div>
         <div class="gallery" id="galleryBox"></div>
         <section class="note-wall">
@@ -797,6 +826,12 @@
                 <div class="upload-body">
                     <div class="upload-row">
                         <label>📸 上传照片（可多选，自动加入照片墙）</label>
+                        <div class="album-pick">
+                            <span class="album-label">相册：</span>
+                            <button type="button" class="album-chip" data-album="我的世界">我的世界</button>
+                            <button type="button" class="album-chip" data-album="第五人格">第五人格</button>
+                            <span class="album-hint">不选默认归入「其他」</span>
+                        </div>
                         <input type="file" id="photoFiles" accept="image/*" multiple>
                         <button id="uploadPhotoBtn">上传照片</button>
                     </div>
@@ -919,6 +954,22 @@
         let currentSongIndex = 0;
         let currentMusicSrc = "";
         let currentFilter = "all";
+        // 上传照片选择的相册：空 = 归入「其他」
+        let pickedAlbum = "";
+        function pickedAlbumName(){ return pickedAlbum || "其他"; }
+        document.querySelectorAll(".album-chip").forEach(ch=>{
+            ch.onclick = function(){
+                const val = this.dataset.album;
+                if(pickedAlbum === val){
+                    pickedAlbum = "";
+                    this.classList.remove("active");
+                }else{
+                    pickedAlbum = val;
+                    document.querySelectorAll(".album-chip").forEach(c=>c.classList.remove("active"));
+                    this.classList.add("active");
+                }
+            };
+        });
         let userNotes = JSON.parse(localStorage.getItem("loveNotes")) || [];
 
         // ========== 共享后端：EdgeOne 版走自家 API，GitHub Pages 版走 Supabase，都没有则本地 ==========
@@ -1284,7 +1335,14 @@
             const galleryBox = document.getElementById('galleryBox');
             galleryBox.innerHTML = "";
             const allPhotos = photoData.concat(uploadedPhotos);
-            let showList = filterKey === "all" ? [...allPhotos] : allPhotos.filter(p=> p.tags.includes(filterKey));
+            const WEEK = 7 * 24 * 60 * 60 * 1000;
+            let showList;
+            if(filterKey === "上传"){
+                // 最近上传：只显示 7 天内上传的照片；超期的自然退出（数据仍保留在对应相册里）
+                showList = allPhotos.filter(p => p.tags.includes("上传") && (!p.ts || Date.now() - p.ts < WEEK));
+            }else{
+                showList = filterKey === "all" ? [...allPhotos] : allPhotos.filter(p=> p.tags.includes(filterKey));
+            }
             showList.forEach((photo,idx)=>{
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'gallery-item';
@@ -1336,7 +1394,7 @@
                     if(d && d.ok && Array.isArray(d.photos)){
                         backendMode = "edgeone";
                         edgeoneOk = true;
-                        uploadedPhotos = d.photos.map(p=>({src:"api/photos?id="+p.id, tags:["上传"]}));
+                        uploadedPhotos = d.photos.map(p=>({src:"api/photos?id="+p.id, tags:["上传", p.album || "其他"], ts: p.ts || 0}));
                         renderGallery(currentFilter);
                     }
                 }
@@ -1353,10 +1411,14 @@
             if(sb){
                 try{
                     let supaOk = false;
-                    const pr = await sb.from("photos").select("id,path").order("created_at", { ascending: true });
+                    const pr = await sb.from("photos").select("id,path,created_at").order("created_at", { ascending: true });
                     if(!pr.error && pr.data){
                         supaOk = true;
-                        uploadedPhotos = pr.data.map(p=>({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传"] }));
+                        // 相册存在存储路径前缀里（我的世界/xxx.jpg），无前缀的旧照片归入「其他」
+                        uploadedPhotos = pr.data.map(p=>{
+                            const album = (p.path && p.path.indexOf("/") >= 0) ? p.path.split("/")[0] : "其他";
+                            return { id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传", album], ts: p.created_at ? new Date(p.created_at).getTime() : 0 };
+                        });
                         renderGallery(currentFilter);
                     }
                     const sr = await sb.from("songs").select("id,name,path,lrc").order("created_at", { ascending: true });
@@ -1387,7 +1449,7 @@
                     tip.textContent = "照片上传中 (" + (i + 1) + "/" + files.length + ")：" + raw.name;
                     try{
                         const ext = ((f.name.match(/\.(\w+)$/) || [])[1] || "jpg").toLowerCase();
-                        const path = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+                        const path = pickedAlbumName() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
                         const up = await sb.storage.from("photos").upload(path, f, { contentType: f.type || "image/jpeg" });
                         if(up.error) throw up.error;
                         const ins = await sb.from("photos").insert({ path: path }).select().single();
@@ -1399,7 +1461,7 @@
                     }
                 }
                 if(saved.length > 0){
-                    for(const p of saved){ uploadedPhotos.push({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传"] }); }
+                    for(const p of saved){ uploadedPhotos.push({ id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传", pickedAlbumName()], ts: Date.now() }); }
                     renderGallery(currentFilter);
                     renderManage();
                     input.value = "";
@@ -1422,14 +1484,14 @@
                     if(!initRes.ok || !init.ok) throw new Error(init.error || initRes.status);
                     const putRes = await fetch(init.url, { method: "PUT", headers: { "Content-Type": type }, body: f });
                     if(!putRes.ok) throw new Error("直传失败" + putRes.status);
-                    const finRes = await fetch("api/photos?mode=finish", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ id: init.id, name: f.name, type: type }) });
+                    const finRes = await fetch("api/photos?mode=finish", { method:"POST", headers:{ "content-type": "application/json" }, body: JSON.stringify({ id: init.id, name: f.name, type: type, album: pickedAlbumName() }) });
                     const fin = await finRes.json();
                     if(!finRes.ok || !fin.ok || !fin.saved) throw new Error(fin.error || finRes.status);
                     saved.push(fin.saved);
                 }catch(e){ failMsg = "「" + f.name + "」上传失败：" + (e.message || "网络错误"); }
             }
             if(saved.length > 0){
-                for(const p of saved){ uploadedPhotos.push({src:"api/photos?id="+p.id, tags:["上传"]}); }
+                for(const p of saved){ uploadedPhotos.push({src:"api/photos?id="+p.id, tags:["上传", p.album || "其他"], ts: p.ts || Date.now()}); }
                 renderGallery(currentFilter);
                 renderManage();
                 input.value = "";

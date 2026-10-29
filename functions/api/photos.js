@@ -100,7 +100,9 @@ export async function onRequest({ request }){
             }catch(e){ return json({ ok: false, error: "UPLOAD_NOT_FOUND" }, 400); }
             let ctype = String((body && body.type) || "");
             if(ctype.indexOf("image/") !== 0) ctype = "image/jpeg";
+            const rawAlbum = String((body && body.album) || "");
             const meta = { id: id, name: String((body && body.name) || "").slice(0, 50), type: ctype, ts: Date.now() };
+            meta.album = (rawAlbum === "我的世界" || rawAlbum === "第五人格") ? rawAlbum : "其他";
             try{ await store.set("meta/photo/" + id, JSON.stringify(meta)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
             return json({ ok: true, saved: meta });
         }
@@ -127,7 +129,7 @@ export async function onRequest({ request }){
                 const buf = await f.arrayBuffer();
                 await store.set("photo/" + id, buf);
             }catch(e){ continue; }
-            const meta = { id: id, name: String(f.name || "").slice(0, 50), type: f.type || "image/jpeg", ts: Date.now() };
+            const meta = { id: id, name: String(f.name || "").slice(0, 50), type: f.type || "image/jpeg", ts: Date.now(), album: "其他" };
             try{ await store.set("meta/photo/" + id, JSON.stringify(meta)); }catch(e){}
             saved.push(meta);
         }
