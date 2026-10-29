@@ -913,8 +913,8 @@
 
         // ========== 共享后端：EdgeOne 版走自家 API，GitHub Pages 版走 Supabase，都没有则本地 ==========
         // Supabase 配置（supabase.com 项目 → Settings → API 复制这两项；保持 YOUR- 开头 = 未启用）
-        const SUPA_URL = "https://YOUR-PROJECT.supabase.co";
-        const SUPA_KEY = "YOUR-ANON-KEY";
+        const SUPA_URL = "https://csiicpmanawqiarfqafj.supabase.co";
+        const SUPA_KEY = "sb_publishable_bedTiItvt0AUUG_puYgrrw_6y44I9c9";
         let sb = null;
         try{
             if(typeof supabase !== "undefined" && SUPA_URL.indexOf("YOUR-") !== 0 && SUPA_KEY.indexOf("YOUR-") !== 0){
