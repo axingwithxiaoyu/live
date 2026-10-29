@@ -1,5 +1,5 @@
 // 照片接口：GET 列表 / GET ?id=xx 取图 / POST 上传(multipart, 字段名 files)
-// 元数据存 KV(NOTES_KV, 前缀 photo:)，图片二进制存 Blob(BLOB, 键 photo/<id>)
+// 元数据存 KV(NOTES_KV, 前缀 photo:)，图片二进制存 Blob（新版走 SDK @edgeone/pages-blob 的 media 库，键 photo/<id>）
 
 function json(data, status){
     return new Response(JSON.stringify(data), {
@@ -13,12 +13,29 @@ function json(data, status){
     });
 }
 function getKV(env){ return (env && (env.NOTES_KV || env.KV)) || null; }
-function getBlob(env){
-    const b = (env && (env.BLOB || env.MEDIA_BLOB || env.BLOBS)) || null;
-    if(!b || typeof b.put !== "function" || typeof b.get !== "function") return null;
-    return b;
+// Blob：新版 Makers 控制台用官方 SDK（自动创建、自动鉴权）；旧绑定 env.BLOB 作兼容回退
+let _storePromise = null;
+function loadStore(){
+    if(!_storePromise){
+        _storePromise = import("@edgeone/pages-blob").then(m => {
+            const gs = m.getStore || (m.default && m.default.getStore);
+            return gs ? gs("media") : null;
+        }).catch(() => { _storePromise = null; return null; });
+    }
+    return _storePromise;
 }
-async function blobGet(b, key){
+async function getBlob(env){
+    const legacy = (env && (env.BLOB || env.MEDIA_BLOB || env.BLOBS)) || null;
+    if(legacy && typeof legacy.put === "function" && typeof legacy.get === "function") return legacy;
+    return await loadStore();
+}
+function isSdkStore(b){ return typeof b.set === "function"; }
+async function blobPut(b, key, val){
+    if(isSdkStore(b)){ await b.set(key, val); return; }
+    await b.put(key, val);
+}
+async function blobGetBin(b, key){
+    if(isSdkStore(b)) return await b.get(key, { type: "arrayBuffer", consistency: "strong" });
     const v = await b.get(key);
     if(v === undefined || v === null) return null;
     if(typeof v === "string") return v;
@@ -54,7 +71,7 @@ export async function onRequest({ request, env }){
 
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
-    const blob = getBlob(env);
+    const blob = await getBlob(env);
 
     if(request.method === "GET"){
         if(id){
@@ -62,7 +79,8 @@ export async function onRequest({ request, env }){
             let type = "image/jpeg";
             const metaRaw = await kv.get("photo:" + id);
             if(metaRaw){ try{ type = JSON.parse(metaRaw).type || type; }catch(e){} }
-            const data = await blobGet(blob, "photo/" + id);
+            let data;
+            try{ data = await blobGetBin(blob, "photo/" + id); }catch(e){ return json({ ok: false, error: "BLOB_GET_FAIL" }, 500); }
             if(data === null) return json({ ok: false, error: "NOT_FOUND" }, 404);
             return new Response(data, {
                 headers: { "content-type": type, "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" }
@@ -83,7 +101,7 @@ export async function onRequest({ request, env }){
             const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
             try{
                 const buf = await f.arrayBuffer();
-                await blob.put("photo/" + id, buf);
+                await blobPut(blob, "photo/" + id, buf);
             }catch(e){ continue; }
             const meta = { id: id, name: String(f.name || "").slice(0, 50), type: f.type || "image/jpeg", ts: Date.now() };
             await kv.put("photo:" + id, JSON.stringify(meta));
