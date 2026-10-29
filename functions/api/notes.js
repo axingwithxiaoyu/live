@@ -76,12 +76,14 @@ export async function onRequest({ request }){
         const name = String((body && body.name) || "").trim().slice(0, 20) || "匿名";
         const text = String((body && body.text) || "").trim().slice(0, 200);
         if(!text) return json({ ok: false, error: "EMPTY" }, 400);
+        const date = String((body && body.date) || "").slice(0, 20);
         const note = {
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
             name: name,
             text: text,
             ts: Date.now()
         };
+        if(date) note.date = date;
         try{
             await store.set("note/" + note.id, JSON.stringify(note));
         }catch(e){

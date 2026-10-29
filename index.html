@@ -425,6 +425,13 @@
             font-size:15px;
             line-height:1.6;
         }
+        .note-date{
+            margin-top:8px;
+            text-align:right;
+            font-size:12px;
+            color:#cba3b5;
+            letter-spacing:0.5px;
+        }
         .words {
             margin-top: 40px;
             padding: 24px;
@@ -1100,6 +1107,20 @@
         function saveUserNotes(){
             localStorage.setItem("loveNotes", JSON.stringify(userNotes));
         }
+        // 留言日期：新留言按发布当天日期存储；早期无日期字段的留言统一显示 2026/10/29
+        function fmtNoteDate(d){
+            try{
+                const t = d ? new Date(d) : new Date();
+                if(isNaN(t.getTime())) return "";
+                return t.getFullYear() + "/" + (t.getMonth() + 1) + "/" + t.getDate();
+            }catch(e){ return ""; }
+        }
+        const LEGACY_NOTE_DATE = "2026/10/29";
+        function noteDateStr(n){
+            if(n && n.date) return n.date;
+            if(n && n.created_at){ const s = fmtNoteDate(n.created_at); if(s) return s; }
+            return LEGACY_NOTE_DATE;
+        }
         function renderAllNotes(){
             const noteBox = document.getElementById("noteBox");
             noteBox.innerHTML = "";
@@ -1120,6 +1141,7 @@
                     div.innerHTML = `
                         <span class="note-del note-del-server" data-id="${escHtml(item.id)}">✕</span>
                         <div class="note-text">${escHtml(item.text)}</div>
+                        <div class="note-date">${escHtml(noteDateStr(item))}</div>
                     `;
                     noteBox.appendChild(div);
                 });
@@ -1152,6 +1174,7 @@
                     div.innerHTML = `
                         <span class="note-del" data-idx="${idx}">✕</span>
                         <div class="note-text">${escHtml(item.content)}</div>
+                        <div class="note-date">${escHtml(item.date || LEGACY_NOTE_DATE)}</div>
                     `;
                     noteBox.appendChild(div);
                 })
@@ -1178,7 +1201,7 @@
                     if(backendMode === "supabase"){
                         const r = await sb.from("notes").insert({ text: txt }).select().single();
                         if(r.error) throw r.error;
-                        serverNotes.unshift({ id: r.data.id, text: r.data.text });
+                        serverNotes.unshift({ id: r.data.id, text: r.data.text, created_at: r.data.created_at });
                         renderAllNotes();
                         textarea.value = "";
                         btn.disabled = false;
@@ -1187,7 +1210,7 @@
                     const res = await fetch("api/notes", {
                         method: "POST",
                         headers: {"content-type": "application/json"},
-                        body: JSON.stringify({ text: txt })
+                        body: JSON.stringify({ text: txt, date: fmtNoteDate() })
                     });
                     const data = await res.json();
                     if(res.ok && data.ok && data.note){
@@ -1201,7 +1224,7 @@
             }
             const clsList = ["note-1","note-2","note-3","note-4"];
             const randomCls = clsList[Math.floor(Math.random()*clsList.length)];
-            userNotes.push({cls:randomCls, content:txt});
+            userNotes.push({cls:randomCls, content:txt, date:fmtNoteDate()});
             saveUserNotes();
             renderAllNotes();
             textarea.value = "";
