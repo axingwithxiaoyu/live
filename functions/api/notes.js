@@ -71,6 +71,23 @@ export async function onRequest({ request }){
             try{ await store.delete("note/" + id); }catch(e){}
             return json({ ok: true });
         }
+        // mode=pin：置顶 / 取消置顶一条留言
+        if(u.searchParams.get("mode") === "pin"){
+            let db = null;
+            try{ db = await request.json(); }catch(e){}
+            const id = String((db && db.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            const pinned = !!(db && db.pinned);
+            let note = null;
+            try{
+                const v = await store.get("note/" + id, { consistency: "strong" });
+                note = v ? JSON.parse(v) : null;
+            }catch(e){}
+            if(!note) return json({ ok: false, error: "NOT_FOUND" }, 404);
+            note.pinned = pinned;
+            try{ await store.set("note/" + id, JSON.stringify(note)); }catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
+            return json({ ok: true, note: note });
+        }
         let body = null;
         try { body = await request.json(); } catch(e) {}
         const name = String((body && body.name) || "").trim().slice(0, 20) || "匿名";

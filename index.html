@@ -491,6 +491,35 @@
         .note:hover .note-del{
             opacity:1;
         }
+        .note-pinbtn{
+            position:absolute;
+            top:4px;
+            right:26px;
+            font-size:12px;
+            cursor:pointer;
+            opacity:0.35;
+            transition:0.2s;
+        }
+        .note:hover .note-pinbtn{
+            opacity:1;
+        }
+        .note-pinbtn.pinned{
+            opacity:0.9;
+        }
+        .note-pin-badge{
+            position:absolute;
+            top:5px;
+            left:8px;
+            font-size:16px;
+            z-index:3;
+            filter:drop-shadow(0 1px 1px rgba(0,0,0,0.15));
+        }
+        .note.pinned .dec-tl{
+            display:none;
+        }
+        .note.pinned{
+            box-shadow:2px 3px 10px rgba(255,136,170,0.4);
+        }
         .note-1{background:#fff8bc; --r:-2deg;}
         .note-2{background:#ffddee; --r:2deg;}
         .note-3{background:#dcf6ff; --r:-1.5deg;}
@@ -1257,6 +1286,22 @@
                 container.appendChild(groupDiv);
             });
         }
+        // 置顶留言组：始终显示在最前，不折叠
+        function renderPinnedGroup(pairs, buildCard, container){
+            const groupDiv = document.createElement("div");
+            groupDiv.className = "month-group";
+            const head = document.createElement("div");
+            head.className = "month-head";
+            head.innerHTML = '<span>📌</span><span>置顶</span><span class="month-count">' + pairs.length + '条</span>';
+            const cards = document.createElement("div");
+            cards.className = "month-cards";
+            pairs.forEach(w=>{
+                cards.appendChild(buildCard(w.item, w.idx));
+            });
+            groupDiv.appendChild(head);
+            groupDiv.appendChild(cards);
+            container.appendChild(groupDiv);
+        }
         function renderAllNotes(){
             const noteBox = document.getElementById("noteBox");
             noteBox.innerHTML = "";
@@ -1268,19 +1313,24 @@
             });
             if(serverMode){
                 const clsList = ["note-1","note-2","note-3","note-4"];
-                renderGroupedNotes(serverNotes, function(item){
+                function buildServerCard(item){
                     const div = document.createElement("div");
                     const seed = String(item.id || "");
                     let h = 0;
                     for(let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i)) % 997;
-                    div.className = "note " + clsList[h % clsList.length];
+                    div.className = "note " + clsList[h % clsList.length] + (item.pinned ? " pinned" : "");
                     div.innerHTML = `
+                        ${item.pinned ? '<span class="note-pin-badge">📌</span>' : ""}
+                        <span class="note-pinbtn${item.pinned ? " pinned" : ""}" data-id="${escHtml(item.id)}" title="${item.pinned ? "取消置顶" : "置顶"}">📌</span>
                         <span class="note-del note-del-server" data-id="${escHtml(item.id)}">✕</span>
                         <div class="note-text">${escHtml(item.text)}</div>
                         <div class="note-date">${escHtml(noteDateStr(item))}</div>
                     `;
                     return div;
-                }, noteBox, "first");
+                }
+                const pinnedPairs = serverNotes.filter(n=>n.pinned).map(n=>({ item: n, idx: -1 }));
+                if(pinnedPairs.length > 0){ renderPinnedGroup(pinnedPairs, buildServerCard, noteBox); }
+                renderGroupedNotes(serverNotes.filter(n=>!n.pinned), buildServerCard, noteBox, "first");
                 document.querySelectorAll(".note-del-server").forEach(el=>{
                     el.onclick = async function(){
                         const id = el.getAttribute("data-id");
@@ -1303,17 +1353,46 @@
                         }
                     };
                 });
+                document.querySelectorAll(".note-pinbtn").forEach(el=>{
+                    el.onclick = async function(){
+                        const id = el.getAttribute("data-id");
+                        const item = serverNotes.find(n=>String(n.id) === String(id));
+                        const target = !(item && item.pinned);
+                        el.style.opacity = "0.3";
+                        try{
+                            if(backendMode === "supabase"){
+                                const r = await sb.from("notes").update({ pinned: target }).eq("id", id);
+                                if(r.error) throw r.error;
+                            }else{
+                                const res = await fetch("api/notes?mode=pin", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id: id, pinned: target }) });
+                                const d = await res.json();
+                                if(!(res.ok && d.ok)) throw new Error((d && d.error) || res.status);
+                            }
+                            if(item) item.pinned = target;
+                            renderAllNotes();
+                        }catch(e){
+                            alert((target ? "置顶失败：" : "取消置顶失败：") + (e.message || "网络错误"));
+                            el.style.opacity = "";
+                        }
+                    };
+                });
             } else {
-                renderGroupedNotes(userNotes, function(item, idx){
+                function buildLocalCard(item, idx){
                     const div = document.createElement("div");
-                    div.className = "note " + item.cls;
+                    div.className = "note " + item.cls + (item.pinned ? " pinned" : "");
                     div.innerHTML = `
+                        ${item.pinned ? '<span class="note-pin-badge">📌</span>' : ""}
+                        <span class="note-pinbtn${item.pinned ? " pinned" : ""}" data-idx="${idx}" title="${item.pinned ? "取消置顶" : "置顶"}">📌</span>
                         <span class="note-del" data-idx="${idx}">✕</span>
                         <div class="note-text">${escHtml(item.content)}</div>
                         <div class="note-date">${escHtml(item.date || LEGACY_NOTE_DATE)}</div>
                     `;
                     return div;
-                }, noteBox, "last");
+                }
+                const pinnedPairs = [];
+                userNotes.forEach((item, idx)=>{ if(item.pinned) pinnedPairs.push({ item: item, idx: idx }); });
+                if(pinnedPairs.length > 0){ renderPinnedGroup(pinnedPairs, buildLocalCard, noteBox); }
+                renderGroupedNotes(userNotes.filter(n=>!n.pinned), buildLocalCard, noteBox, "last");
                 document.querySelectorAll(".note-del").forEach(el=>{
                     el.onclick = function(e){
                         e.stopPropagation();
@@ -1323,6 +1402,15 @@
                         renderAllNotes();
                     }
                 })
+                document.querySelectorAll(".note-pinbtn").forEach(el=>{
+                    el.onclick = function(e){
+                        e.stopPropagation();
+                        const i = Number(this.dataset.idx);
+                        if(userNotes[i]) userNotes[i].pinned = !userNotes[i].pinned;
+                        saveUserNotes();
+                        renderAllNotes();
+                    };
+                });
             }
         }
         document.getElementById("addNoteBtn").onclick = async function(){
