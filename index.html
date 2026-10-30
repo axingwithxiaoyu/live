@@ -1714,9 +1714,11 @@
                     const pr = await sb.from("photos").select("id,path,created_at").order("created_at", { ascending: true });
                     if(!pr.error && pr.data){
                         supaOk = true;
-                        // 相册存在存储路径前缀里（我的世界/xxx.jpg），无前缀的旧照片归入「其他」
+                        // 相册存在存储路径前缀里。Supabase 存储不支持中文 key，目录用英文代号：minecraft/idv/other
+                        const ALBUM_NAMES = { "minecraft":"我的世界", "idv":"第五人格" };
                         uploadedPhotos = pr.data.map(p=>{
-                            const album = (p.path && p.path.indexOf("/") >= 0) ? p.path.split("/")[0] : "其他";
+                            const dir = (p.path && p.path.indexOf("/") >= 0) ? p.path.split("/")[0] : "";
+                            const album = ALBUM_NAMES[dir] || dir || "其他";
                             return { id:p.id, path:p.path, src: supaUrl("photos", p.path), tags:["上传", album], ts: p.created_at ? new Date(p.created_at).getTime() : 0 };
                         });
                         renderGallery(currentFilter);
@@ -1749,7 +1751,8 @@
                     tip.textContent = "照片上传中 (" + (i + 1) + "/" + files.length + ")：" + raw.name;
                     try{
                         const ext = ((f.name.match(/\.(\w+)$/) || [])[1] || "jpg").toLowerCase();
-                        const path = pickedAlbumName() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+                        const dir = pickedAlbumName() === "我的世界" ? "minecraft" : (pickedAlbumName() === "第五人格" ? "idv" : "other");
+                        const path = dir + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
                         const up = await sb.storage.from("photos").upload(path, f, { contentType: f.type || "image/jpeg" });
                         if(up.error) throw up.error;
                         const ins = await sb.from("photos").insert({ path: path }).select().single();

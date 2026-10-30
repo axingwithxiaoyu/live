@@ -149,9 +149,11 @@
             const p = photos[i];
             const album = (p.album === "我的世界" || p.album === "第五人格") ? p.album : "其他";
             const ext = ((p.type || "image/jpeg").split("/")[1] || "jpg").replace("jpeg", "jpg");
-            const path = album + "/eo-" + p.id + "." + ext;
+            // Supabase 存储不支持中文 key，相册目录用英文代号（主站读取端会映射回中文）
+            const dir = album === "我的世界" ? "minecraft" : (album === "第五人格" ? "idv" : "other");
+            const path = dir + "/eo-" + p.id + "." + ext;
             if(exPaths.has(path)){ pSkip++; log("  · 跳过 " + path); continue; }
-            log("  (" + (i + 1) + "/" + photos.length + ") " + path + " 下载中…");
+            log("  (" + (i + 1) + "/" + photos.length + ") [" + album + "] " + (p.name || p.id) + " 下载中…");
             try{
                 const resp = await fetch("api/photos?id=" + encodeURIComponent(p.id));
                 if(!resp.ok) throw new Error("下载失败 " + resp.status);
@@ -178,8 +180,8 @@
         const exSongs = new Set(((await sb.from("songs").select("path")).data || []).map(r => r.path));
         for(let i = 0; i < songs.length; i++){
             const s = songs[i];
-            const safeName = ((s.name || ("song-" + s.id)).replace(/\.(mp3|MP3)$/, "").replace(/[\\/:*?"<>|]+/g, "_"));
-            const path = "eo-" + s.id + "-" + safeName + ".mp3";
+            // key 纯 ASCII（歌名存表里的 name 字段，不会丢）
+            const path = "eo-" + s.id + ".mp3";
             if(exSongs.has(path)){ sSkip++; log("  · 跳过 " + path); continue; }
             log("  (" + (i + 1) + "/" + songs.length + ") " + s.name + " 下载中…");
             try{
