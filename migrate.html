@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeOne → Supabase 数据迁移</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        *{ margin:0; padding:0; box-sizing:border-box; font-family:"Microsoft YaHei",sans-serif; }
+        body{ background:linear-gradient(140deg,#ffe8f0 0%,#ffd8e8 30%,#fce4f2 60%,#fff0f6 100%); min-height:100vh; padding:40px 15px; color:#7b4157; }
+        .card{ max-width:720px; margin:0 auto; background:#fff; border-radius:16px; box-shadow:0 6px 24px rgba(123,65,87,.12); padding:28px; }
+        h1{ font-size:22px; margin-bottom:8px; }
+        .tip{ font-size:13px; color:#b0748c; margin-bottom:20px; line-height:1.7; }
+        .step{ border:1px solid #ffd6e4; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+        .step h2{ font-size:15px; margin-bottom:8px; }
+        .btn{ padding:10px 24px; background:#ff88aa; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:14px; }
+        .btn:disabled{ opacity:.5; cursor:not-allowed; }
+        .btn.ghost{ background:#fff; color:#7b4157; border:2px solid #ffc8d8; }
+        .log{ margin-top:18px; background:#fff7fa; border:1px solid #ffe0ec; border-radius:10px; padding:12px; height:300px; overflow-y:auto; font-size:12px; font-family:Consolas,monospace; white-space:pre-wrap; word-break:break-all; line-height:1.7; display:none; }
+        .sql{ background:#fff0f6; border:1px dashed #ff9ebb; border-radius:8px; padding:10px; font-family:Consolas,monospace; font-size:12px; margin:8px 0; white-space:pre-wrap; user-select:all; display:none; }
+        .ok{ color:#2e9e5b; } .bad{ color:#e0447f; }
+        .stat{ font-size:13px; margin-top:6px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>🚚 EdgeOne → Supabase 数据迁移</h1>
+    <div class="tip">
+        本页面是一次性迁移工具：把 EdgeOne 版的照片 / 歌曲 / 留言全部搬到 GitHub 主力站的 Supabase。<br>
+        请在 <b>EdgeOne 域名</b>下打开本页（api 接口同源才能访问），并且网络需能连上 Supabase（连不上请开代理）。<br>
+        迁移可重复执行：已经搬过的数据会自动跳过，不会重复。
+    </div>
+
+    <div class="step">
+        <h2>第 1 步 · 检查数据源与后端</h2>
+        <div class="stat" id="checkStat">未检查</div>
+        <div class="sql" id="sqlBox"></div>
+        <button class="btn ghost" id="checkBtn" style="margin-top:10px">开始检查</button>
+    </div>
+
+    <div class="step">
+        <h2>第 2 步 · 执行迁移</h2>
+        <div class="stat" id="migrateStat">检查通过后可用</div>
+        <button class="btn" id="goBtn" disabled style="margin-top:10px">开始迁移</button>
+        <div class="log" id="logBox"></div>
+    </div>
+</div>
+
+<script>
+    const SUPA_URL = "https://csiicpmanawqiarfqafj.supabase.co";
+    const SUPA_KEY = "sb_publishable_bedTiItvt0AUUG_puYgrrw_6y44I9c9";
+    const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+    const $ = id => document.getElementById(id);
+    const logBox = $("logBox");
+    let checked = false;
+
+    function log(msg, cls){
+        logBox.style.display = "block";
+        const line = document.createElement("div");
+        if(cls) line.className = cls;
+        line.textContent = msg;
+        logBox.appendChild(line);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+    function logAppend(msg){ logBox.lastChild.textContent += msg; }
+
+    // ---- 第 1 步：检查 ----
+    $("checkBtn").onclick = async function(){
+        this.disabled = true;
+        const st = $("checkStat");
+        st.textContent = "检查中…";
+        try{
+            // 1) EdgeOne 数据源
+            const [nRes, pRes, sRes] = await Promise.all([
+                fetch("api/notes").then(r => r.json()),
+                fetch("api/photos").then(r => r.json()),
+                fetch("api/songs").then(r => r.json())
+            ]);
+            const notes = (nRes && nRes.notes) || [];
+            const photos = (pRes && pRes.photos) || [];
+            const songs = (sRes && sRes.songs) || [];
+            if(notes.length + photos.length + songs.length === 0){
+                st.innerHTML = '<span class="bad">EdgeOne 上没有可迁移的数据（或接口异常）。请确认在 EdgeOne 域名下打开本页。</span>';
+                this.disabled = false; return;
+            }
+            window.__data = { notes, photos, songs };
+            let html = 'EdgeOne 数据：留言 <b>' + notes.length + '</b> 条 · 照片 <b>' + photos.length + '</b> 张 · 歌曲 <b>' + songs.length + '</b> 首<br>';
+
+            // 2) Supabase 连通性 + notes 表列
+            let probe = await sb.from("notes").select("id,text,pinned,sign,date").limit(1);
+            if(probe.error){
+                html += '<span class="bad">Supabase notes 表缺列（pinned / sign / date），请先在 Supabase SQL Editor 运行下方 SQL，再点「开始检查」：</span>';
+                $("sqlBox").textContent =
+                    "alter table public.notes add column if not exists pinned boolean default false;\n" +
+                    "alter table public.notes add column if not exists sign text;\n" +
+                    "alter table public.notes add column if not exists date text;";
+                $("sqlBox").style.display = "block";
+                st.innerHTML = html;
+                this.disabled = false; return;
+            }
+            probe = await sb.from("photos").select("path").limit(1);
+            if(probe.error){ html += '<span class="bad">连不上 Supabase（' + probe.error.message + '），请开代理后重试。</span>'; st.innerHTML = html; this.disabled = false; return; }
+            html += '<span class="ok">Supabase 连接正常，可以迁移 ✓</span>';
+            st.innerHTML = html;
+            checked = true;
+            $("goBtn").disabled = false;
+            $("migrateStat").textContent = "就绪，点击开始";
+        }catch(e){
+            st.innerHTML = '<span class="bad">检查失败：' + (e.message || e) + '（请确认在 EdgeOne 域名下打开，且网络可访问 Supabase）</span>';
+            this.disabled = false;
+        }
+    };
+
+    // ---- 第 2 步：迁移 ----
+    $("goBtn").onclick = async function(){
+        if(!checked) return;
+        this.disabled = true;
+        $("checkBtn").disabled = true;
+        const { notes, photos, songs } = window.__data;
+
+        log("=== 开始迁移 ===");
+
+        // ---- 留言 ----
+        log("◆ 留言（" + notes.length + " 条）…");
+        let nOk = 0, nSkip = 0, nFail = 0;
+        const existNotes = await sb.from("notes").select("text");
+        const existSet = new Set((existNotes.data || []).map(n => (n.text || "").trim()));
+        for(const n of notes){
+            const t = (n.text || "").trim();
+            if(!t || existSet.has(t)){ nSkip++; continue; }
+            const row = { text: n.text };
+            const ts = n.ts || (n.created_at ? new Date(n.created_at).getTime() : 0);
+            if(ts) row.created_at = new Date(ts).toISOString();
+            if(n.date) row.date = n.date;
+            if(n.sign) row.sign = n.sign;
+            if(n.pinned) row.pinned = true;
+            const r = await sb.from("notes").insert(row);
+            if(r.error){ nFail++; log("  ✕ 留言「" + t.slice(0, 12) + "」失败：" + r.error.message, "bad"); }
+            else nOk++;
+        }
+        log("  留言完成：新增 " + nOk + "，跳过 " + nSkip + "，失败 " + nFail, nFail ? "bad" : "ok");
+
+        // ---- 照片 ----
+        log("◆ 照片（" + photos.length + " 张）…");
+        let pOk = 0, pSkip = 0, pFail = 0;
+        const exPaths = new Set(((await sb.from("photos").select("path")).data || []).map(r => r.path));
+        for(let i = 0; i < photos.length; i++){
+            const p = photos[i];
+            const album = (p.album === "我的世界" || p.album === "第五人格") ? p.album : "其他";
+            const ext = ((p.type || "image/jpeg").split("/")[1] || "jpg").replace("jpeg", "jpg");
+            const path = album + "/eo-" + p.id + "." + ext;
+            if(exPaths.has(path)){ pSkip++; log("  · 跳过 " + path); continue; }
+            log("  (" + (i + 1) + "/" + photos.length + ") " + path + " 下载中…");
+            try{
+                const resp = await fetch("api/photos?id=" + encodeURIComponent(p.id));
+                if(!resp.ok) throw new Error("下载失败 " + resp.status);
+                const blob = await resp.blob();
+                logAppend(" 上传中…");
+                const up = await sb.storage.from("photos").upload(path, blob, { contentType: p.type || "image/jpeg", upsert: true });
+                if(up.error) throw up.error;
+                const ca = p.ts ? new Date(p.ts).toISOString() : null;
+                let ins = ca ? await sb.from("photos").insert({ path: path, created_at: ca }) : await sb.from("photos").insert({ path: path });
+                if(ins.error && ca){ ins = await sb.from("photos").insert({ path: path }); } // created_at 不兼容时退回默认时间
+                if(ins.error) throw ins.error;
+                logAppend(" ✓");
+                pOk++;
+            }catch(e){
+                pFail++;
+                logAppend(" ✕ " + (e.message || e));
+            }
+        }
+        log("  照片完成：新增 " + pOk + "，跳过 " + pSkip + "，失败 " + pFail, pFail ? "bad" : "ok");
+
+        // ---- 歌曲 ----
+        log("◆ 歌曲（" + songs.length + " 首）…");
+        let sOk = 0, sSkip = 0, sFail = 0;
+        const exSongs = new Set(((await sb.from("songs").select("path")).data || []).map(r => r.path));
+        for(let i = 0; i < songs.length; i++){
+            const s = songs[i];
+            const safeName = ((s.name || ("song-" + s.id)).replace(/\.(mp3|MP3)$/, "").replace(/[\\/:*?"<>|]+/g, "_"));
+            const path = "eo-" + s.id + "-" + safeName + ".mp3";
+            if(exSongs.has(path)){ sSkip++; log("  · 跳过 " + path); continue; }
+            log("  (" + (i + 1) + "/" + songs.length + ") " + s.name + " 下载中…");
+            try{
+                const resp = await fetch("api/songs?file=" + encodeURIComponent(s.id));
+                if(!resp.ok) throw new Error("下载失败 " + resp.status);
+                const blob = await resp.blob();
+                logAppend(" 上传中…");
+                const up = await sb.storage.from("songs").upload(path, blob, { contentType: "audio/mpeg", upsert: true });
+                if(up.error) throw up.error;
+                let lrcText = "";
+                if(s.hasLrc){
+                    const lr = await fetch("api/songs?lrc=" + encodeURIComponent(s.id));
+                    if(lr.ok) lrcText = await lr.text();
+                }
+                const ca = s.ts ? new Date(s.ts).toISOString() : null;
+                let ins = await sb.from("songs").insert({ name: s.name, path: path, lrc: lrcText, created_at: ca || undefined });
+                if(ins.error && ca){ ins = await sb.from("songs").insert({ name: s.name, path: path, lrc: lrcText }); }
+                if(ins.error) throw ins.error;
+                logAppend(" ✓" + (lrcText ? "（含歌词）" : ""));
+                sOk++;
+            }catch(e){
+                sFail++;
+                logAppend(" ✕ " + (e.message || e));
+            }
+        }
+        log("  歌曲完成：新增 " + sOk + "，跳过 " + sSkip + "，失败 " + sFail, sFail ? "bad" : "ok");
+
+        log("=== 全部完成 === 打开 GitHub 主力站刷新即可验证。", "ok");
+        $("migrateStat").innerHTML = '<span class="ok">迁移结束：留言新增 ' + nOk + ' / 照片新增 ' + pOk + ' / 歌曲新增 ' + sOk + '</span>';
+    };
+</script>
+</body>
+</html>
