@@ -1723,7 +1723,7 @@
                     if(!pr.error && pr.data){
                         supaOk = true;
                         // 相册存在存储路径前缀里。Supabase 存储不支持中文 key，目录用英文代号：minecraft/idv/other
-                        const ALBUM_NAMES = { "minecraft":"我的世界", "idv":"第五人格" };
+                        const ALBUM_NAMES = { "minecraft":"我的世界", "idv":"第五人格", "other":"其他" };
                         uploadedPhotos = pr.data.map(p=>{
                             const dir = (p.path && p.path.indexOf("/") >= 0) ? p.path.split("/")[0] : "";
                             const album = ALBUM_NAMES[dir] || dir || "其他";
