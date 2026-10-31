@@ -1604,11 +1604,19 @@
             if(!sb && sbReady){ try{ await sbReady; }catch(e2){} }
             if(sb){
                 try{
-                    const r = await sb.from("notes").select("id,text").order("created_at", { ascending: false });
+                    const r = await sb.from("notes").select("id,text,pinned,sign,date,created_at").order("created_at", { ascending: false });
                     if(!r.error && r.data){
                         backendMode = "supabase";
                         serverMode = true;
-                        serverNotes = r.data.map(n=>({ id: n.id, text: n.text }));
+                        // 日期/署名/置顶都要带上，显示和分组逻辑与 EdgeOne 版一致
+                        serverNotes = r.data.map(n=>({
+                            id: n.id,
+                            text: n.text,
+                            date: n.date || "",
+                            sign: n.sign || "",
+                            pinned: !!n.pinned,
+                            ts: n.created_at ? new Date(n.created_at).getTime() : 0
+                        }));
                         if(tip) tip.textContent = "💬 共享留言模式：TA 也能看到你写的留言";
                         renderAllNotes();
                         return;

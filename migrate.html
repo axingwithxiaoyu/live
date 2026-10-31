@@ -123,12 +123,28 @@
 
         // ---- 留言 ----
         log("◆ 留言（" + notes.length + " 条）…");
-        let nOk = 0, nSkip = 0, nFail = 0;
-        const existNotes = await sb.from("notes").select("text");
-        const existSet = new Set((existNotes.data || []).map(n => (n.text || "").trim()));
+        let nOk = 0, nSkip = 0, nFail = 0, nFix = 0;
+        const existNotes = await sb.from("notes").select("id,text,date,sign,pinned,created_at");
+        const existMap = new Map((existNotes.data || []).map(n => [(n.text || "").trim(), n]));
         for(const n of notes){
             const t = (n.text || "").trim();
-            if(!t || existSet.has(t)){ nSkip++; continue; }
+            if(!t){ nSkip++; continue; }
+            const ex = existMap.get(t);
+            if(ex){
+                nSkip++;
+                // 幂等修正：已存在但时间/署名/置顶缺失或错误的，补写
+                const wantTs = n.ts || (n.created_at ? new Date(n.created_at).getTime() : 0);
+                const fix = {};
+                if(wantTs && (!ex.created_at || Math.abs(new Date(ex.created_at).getTime() - wantTs) > 120000)) fix.created_at = new Date(wantTs).toISOString();
+                if(n.date && ex.date !== n.date) fix.date = n.date;
+                if(n.sign && !ex.sign) fix.sign = n.sign;
+                if(!!n.pinned !== !!ex.pinned) fix.pinned = !!n.pinned;
+                if(Object.keys(fix).length){
+                    const fx = await sb.from("notes").update(fix).eq("id", ex.id);
+                    if(!fx.error){ nFix++; log("  ⚠ 修正留言「" + t.slice(0, 12) + "」的日期/署名/时间"); }
+                }
+                continue;
+            }
             const row = { text: n.text };
             const ts = n.ts || (n.created_at ? new Date(n.created_at).getTime() : 0);
             if(ts) row.created_at = new Date(ts).toISOString();
@@ -139,12 +155,12 @@
             if(r.error){ nFail++; log("  ✕ 留言「" + t.slice(0, 12) + "」失败：" + r.error.message, "bad"); }
             else nOk++;
         }
-        log("  留言完成：新增 " + nOk + "，跳过 " + nSkip + "，失败 " + nFail, nFail ? "bad" : "ok");
+        log("  留言完成：新增 " + nOk + "，跳过 " + nSkip + "，修正 " + nFix + "，失败 " + nFail, nFail ? "bad" : "ok");
 
         // ---- 照片 ----
         log("◆ 照片（" + photos.length + " 张）…");
-        let pOk = 0, pSkip = 0, pFail = 0;
-        const exPaths = new Set(((await sb.from("photos").select("path")).data || []).map(r => r.path));
+        let pOk = 0, pSkip = 0, pFail = 0, pFix = 0;
+        const exPhotoRows = new Map(((await sb.from("photos").select("id,path,created_at")).data || []).map(r => [r.path, r]));
         for(let i = 0; i < photos.length; i++){
             const p = photos[i];
             const album = (p.album === "我的世界" || p.album === "第五人格") ? p.album : "其他";
@@ -152,7 +168,20 @@
             // Supabase 存储不支持中文 key，相册目录用英文代号（主站读取端会映射回中文）
             const dir = album === "我的世界" ? "minecraft" : (album === "第五人格" ? "idv" : "other");
             const path = dir + "/eo-" + p.id + "." + ext;
-            if(exPaths.has(path)){ pSkip++; log("  · 跳过 " + path); continue; }
+            const exRow = exPhotoRows.get(path);
+            if(exRow){
+                pSkip++;
+                // 幂等修正：已存在但时间是迁移默认值的，改回 EdgeOne 原始上传时间
+                const wantTs = p.ts || 0;
+                if(wantTs && (!exRow.created_at || Math.abs(new Date(exRow.created_at).getTime() - wantTs) > 120000)){
+                    const fx = await sb.from("photos").update({ created_at: new Date(wantTs).toISOString() }).eq("id", exRow.id);
+                    if(!fx.error){ pFix++; log("  ⚠ 修正照片时间：" + (p.name || path)); }
+                    else log("  ✕ 修正时间失败：" + (fx.error.message || fx.error), "bad");
+                }else{
+                    log("  · 跳过 " + path);
+                }
+                continue;
+            }
             log("  (" + (i + 1) + "/" + photos.length + ") [" + album + "] " + (p.name || p.id) + " 下载中…");
             try{
                 const resp = await fetch("api/photos?id=" + encodeURIComponent(p.id));
@@ -163,7 +192,10 @@
                 if(up.error) throw up.error;
                 const ca = p.ts ? new Date(p.ts).toISOString() : null;
                 let ins = ca ? await sb.from("photos").insert({ path: path, created_at: ca }) : await sb.from("photos").insert({ path: path });
-                if(ins.error && ca){ ins = await sb.from("photos").insert({ path: path }); } // created_at 不兼容时退回默认时间
+                if(ins.error && ca){
+                    logAppend(" ⚠原时间写入失败");
+                    ins = await sb.from("photos").insert({ path: path }); // created_at 不兼容时退回默认时间，重跑迁移可自动修正
+                }
                 if(ins.error) throw ins.error;
                 logAppend(" ✓");
                 pOk++;
@@ -172,17 +204,30 @@
                 logAppend(" ✕ " + (e.message || e));
             }
         }
-        log("  照片完成：新增 " + pOk + "，跳过 " + pSkip + "，失败 " + pFail, pFail ? "bad" : "ok");
+        log("  照片完成：新增 " + pOk + "，跳过 " + pSkip + "，修正 " + pFix + "，失败 " + pFail, pFail ? "bad" : "ok");
 
         // ---- 歌曲 ----
         log("◆ 歌曲（" + songs.length + " 首）…");
-        let sOk = 0, sSkip = 0, sFail = 0;
-        const exSongs = new Set(((await sb.from("songs").select("path")).data || []).map(r => r.path));
+        let sOk = 0, sSkip = 0, sFail = 0, sFix = 0;
+        const exSongRows = new Map(((await sb.from("songs").select("id,path,created_at")).data || []).map(r => [r.path, r]));
         for(let i = 0; i < songs.length; i++){
             const s = songs[i];
             // key 纯 ASCII（歌名存表里的 name 字段，不会丢）
             const path = "eo-" + s.id + ".mp3";
-            if(exSongs.has(path)){ sSkip++; log("  · 跳过 " + path); continue; }
+            const exS = exSongRows.get(path);
+            if(exS){
+                sSkip++;
+                // 幂等修正：已存在但时间是迁移默认值的，改回 EdgeOne 原始上传时间
+                const wantTs = s.ts || 0;
+                if(wantTs && (!exS.created_at || Math.abs(new Date(exS.created_at).getTime() - wantTs) > 120000)){
+                    const fx = await sb.from("songs").update({ created_at: new Date(wantTs).toISOString() }).eq("id", exS.id);
+                    if(!fx.error){ sFix++; log("  ⚠ 修正歌曲时间：" + s.name); }
+                    else log("  ✕ 修正时间失败：" + s.name + "（" + (fx.error.message || fx.error) + "）", "bad");
+                }else{
+                    log("  · 跳过 " + s.name);
+                }
+                continue;
+            }
             log("  (" + (i + 1) + "/" + songs.length + ") " + s.name + " 下载中…");
             try{
                 const resp = await fetch("api/songs?file=" + encodeURIComponent(s.id));
@@ -198,7 +243,10 @@
                 }
                 const ca = s.ts ? new Date(s.ts).toISOString() : null;
                 let ins = await sb.from("songs").insert({ name: s.name, path: path, lrc: lrcText, created_at: ca || undefined });
-                if(ins.error && ca){ ins = await sb.from("songs").insert({ name: s.name, path: path, lrc: lrcText }); }
+                if(ins.error && ca){
+                    logAppend(" ⚠原时间写入失败");
+                    ins = await sb.from("songs").insert({ name: s.name, path: path, lrc: lrcText }); // 退回默认时间，重跑迁移可自动修正
+                }
                 if(ins.error) throw ins.error;
                 logAppend(" ✓" + (lrcText ? "（含歌词）" : ""));
                 sOk++;
@@ -207,7 +255,7 @@
                 logAppend(" ✕ " + (e.message || e));
             }
         }
-        log("  歌曲完成：新增 " + sOk + "，跳过 " + sSkip + "，失败 " + sFail, sFail ? "bad" : "ok");
+        log("  歌曲完成：新增 " + sOk + "，跳过 " + sSkip + "，修正 " + sFix + "，失败 " + sFail, sFail ? "bad" : "ok");
 
         log("=== 全部完成 === 打开 GitHub 主力站刷新即可验证。", "ok");
         $("migrateStat").innerHTML = '<span class="ok">迁移结束：留言新增 ' + nOk + ' / 照片新增 ' + pOk + ' / 歌曲新增 ' + sOk + '</span>';
