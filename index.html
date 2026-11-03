@@ -1386,7 +1386,7 @@
                 groups[pos[ym]].items.push({ item: item, idx: i });
             });
             groups.forEach((g, gi)=>{
-                const isOpen = (expand === "last") ? (gi >= groups.length - 2) : (gi < 2);
+                const isOpen = false; // 默认全部折叠，点月份标题展开
                 const groupDiv = document.createElement("div");
                 groupDiv.className = "month-group" + (isOpen ? "" : " collapsed");
                 const head = document.createElement("div");
