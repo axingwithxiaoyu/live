@@ -1,0 +1,86 @@
+// 模板站留言接口：独立 key 前缀 demo-note/，与正式站数据完全隔离
+function json(data, status){
+    return new Response(JSON.stringify(data), {
+        status: status || 200,
+        headers: {
+            "content-type": "application/json; charset=utf-8",
+            "access-control-allow-origin": "*",
+            "access-control-allow-headers": "content-type",
+            "access-control-allow-methods": "GET, POST, OPTIONS"
+        }
+    });
+}
+
+let _storePromise = null;
+function loadStore(){
+    if(!_storePromise){
+        _storePromise = import("@edgeone/pages-blob").then(m => {
+            const gs = m.getStore || (m.default && m.default.getStore);
+            return gs ? gs("media") : null;
+        }).catch(() => { _storePromise = null; return null; });
+    }
+    return _storePromise;
+}
+
+async function listNotes(store){
+    const out = [];
+    const res = await store.list({ prefix: "demo-note/", consistency: "strong" });
+    for(const b of (res.blobs || [])){
+        const id = b.key.slice("demo-note/".length);
+        if(!id) continue;
+        try{
+            const v = await store.get(b.key, { consistency: "strong" });
+            if(v){
+                const n = JSON.parse(v);
+                if(!n.id) n.id = id;
+                out.push(n);
+            }
+        }catch(e){}
+    }
+    out.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return out.slice(0, 500);
+}
+
+export async function onRequest({ request }){
+    if(request.method === "OPTIONS") return json({ ok: true });
+
+    const store = await loadStore();
+    if(!store) return json({ ok: false, error: "BLOB_NOT_READY" }, 500);
+
+    if(request.method === "GET"){
+        try{
+            const notes = await listNotes(store);
+            return json({ ok: true, notes: notes });
+        }catch(e){
+            return json({ ok: false, error: "LIST_FAIL" }, 500);
+        }
+    }
+
+    if(request.method === "POST"){
+        const u = new URL(request.url);
+        if(u.searchParams.get("mode") === "del"){
+            let db = null; try{ db = await request.json(); }catch(e){}
+            const id = String((db && db.id) || "");
+            if(!/^[a-z0-9]+$/.test(id)) return json({ ok: false, error: "BAD_ID" }, 400);
+            try{ await store.delete("demo-note/" + id); }catch(e){}
+            return json({ ok: true });
+        }
+        let body = null; try { body = await request.json(); } catch(e) {}
+        const text = String((body && body.text) || "").trim().slice(0, 200);
+        if(!text) return json({ ok: false, error: "EMPTY" }, 400);
+        const note = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            name: String((body && body.name) || "").trim().slice(0, 20) || "匿名",
+            text: text,
+            date: String((body && body.date) || "").slice(0, 20),
+            sign: String((body && body.sign) || ""),
+            pinned: !!(body && body.pinned),
+            ts: Date.now()
+        };
+        try{ await store.set("demo-note/" + note.id, JSON.stringify(note)); }
+        catch(e){ return json({ ok: false, error: "SAVE_FAIL" }, 500); }
+        return json({ ok: true, note: note });
+    }
+
+    return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
+}

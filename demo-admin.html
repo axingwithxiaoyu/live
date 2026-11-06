@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情侣网站模板 · 管理后台</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Microsoft YaHei", sans-serif; }
+        body { background: linear-gradient(140deg, #ffe8f0, #ffd8e8); min-height: 100vh; padding: 30px 15px; }
+        .wrap { max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; color: #7b4157; margin-bottom: 20px; font-size: 24px; }
+        .card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 3px 12px rgba(123,65,87,0.08); }
+        .card h2 { font-size: 16px; color: #7b4157; margin-bottom: 12px; }
+        input[type=text], input[type=password], input[type=file], select { width: 100%; padding: 8px 12px; border: 1px solid #ffd6e4; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
+        button { padding: 8px 20px; background: #ff88aa; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin-right: 8px; }
+        button:hover { background: #ff6d94; }
+        button.ghost { background: #fff; color: #ff88aa; border: 1px solid #ff88aa; }
+        button.danger { background: #e87fa0; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+        .row label { font-size: 13px; color: #b0748c; flex: 0 0 60px; }
+        .status { font-size: 12px; color: #c2889f; margin-top: 8px; min-height: 16px; }
+        .status.ok { color: #5a9a5a; }
+        .status.err { color: #c2556f; }
+        .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .list-item { background: #fff; border: 1px solid #ffd6e4; border-radius: 8px; padding: 8px; font-size: 12px; position: relative; }
+        .list-item img { width: 100%; height: 80px; object-fit: cover; border-radius: 4px; margin-bottom: 4px; }
+        .list-item .name { color: #7b4157; word-break: break-all; }
+        .list-item .del { position: absolute; top: 2px; right: 2px; background: #e87fa0; border: none; color: #fff; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; padding: 0; cursor: pointer; }
+        .note-item { background: #fff8fa; border-left: 3px solid #ff88aa; padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; position: relative; font-size: 13px; color: #7b4157; }
+        .note-item .del { position: absolute; top: 4px; right: 6px; background: #e87fa0; border: none; color: #fff; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; padding: 0; cursor: pointer; }
+        .hidden { display: none; }
+        .login-box { max-width: 360px; margin: 120px auto 0; }
+        .login-box h2 { text-align: center; font-size: 18px; color: #7b4157; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div id="loginBox" class="login-box">
+        <h2>🔐 管理员登录</h2>
+        <div class="card">
+            <input type="password" id="pwdInput" placeholder="管理员密码" style="margin-bottom:12px">
+            <button onclick="doLogin()" style="width:100%">登录</button>
+            <div class="status" id="loginTip"></div>
+        </div>
+    </div>
+
+    <div id="mainArea" class="hidden">
+        <h1>情侣网站模板 · 管理后台 <button class="ghost" style="float:right" onclick="doLogout()">退出</button></h1>
+
+        <!-- 留言 -->
+        <div class="card">
+            <h2>💌 留言墙（demo 专用）</h2>
+            <textarea id="noteText" placeholder="留言内容" style="width:100%;min-height:60px;padding:8px;border:1px solid #ffd6e4;border-radius:8px;font-size:14px;margin-bottom:8px"></textarea>
+            <div class="row">
+                <label>署名：</label>
+                <select id="noteSign" style="flex:1">
+                    <option value="">不署名</option>
+                    <option value="star">⭐ 星星</option>
+                    <option value="fish">🐟 小鱼</option>
+                </select>
+                <label style="flex:0 0 auto"><input type="checkbox" id="notePin"> 置顶</label>
+            </div>
+            <button onclick="addNote()">添加留言</button>
+            <div class="status" id="noteStatus"></div>
+            <div id="noteList"></div>
+        </div>
+
+        <!-- 照片 -->
+        <div class="card">
+            <h2>📸 照片墙（demo 专用）</h2>
+            <div class="row">
+                <input type="file" id="photoFiles" accept="image/*" multiple style="flex:1;margin:0">
+            </div>
+            <div class="row">
+                <label>相册：</label>
+                <select id="photoAlbum" style="flex:1">
+                    <option value="其他">其他</option>
+                    <option value="我的世界">我的世界</option>
+                    <option value="第五人格">第五人格</option>
+                </select>
+                <button onclick="uploadPhotos()">上传照片</button>
+            </div>
+            <div class="status" id="photoStatus"></div>
+            <div id="photoList"></div>
+        </div>
+
+        <!-- 歌曲 -->
+        <div class="card">
+            <h2>🎵 歌曲（demo 专用）</h2>
+            <div class="row">
+                <input type="file" id="songMp3" accept=".mp3,audio/mpeg" style="flex:1;margin:0">
+            </div>
+            <div class="row">
+                <input type="file" id="songLrc" accept=".lrc,text/plain" style="flex:1;margin:0">
+                <input type="text" id="songName" placeholder="歌曲名（选填，默认用文件名）" style="flex:1;margin:0">
+            </div>
+            <button onclick="uploadSong()">上传歌曲</button>
+            <div class="status" id="songStatus"></div>
+            <div id="songList"></div>
+        </div>
+
+        <div class="card" style="text-align:center;color:#c2889f;font-size:12px">
+            数据存独立 Blob key（demo-note/demo-photo/demo-song），与正式站完全隔离
+        </div>
+    </div>
+</div>
+
+<script>
+const ADMIN_PWD = "demo520admin"; // 管理员密码（改这里，硬编码仅防路人）
+const API_NOTES = "api/demo-notes";
+const API_PHOTOS = "api/demo-photos";
+const API_SONGS = "api/demo-songs";
+let loggedIn = false;
+
+function doLogin(){
+    const v = document.getElementById("pwdInput").value;
+    if(v === ADMIN_PWD){
+        loggedIn = true;
+        document.getElementById("loginBox").classList.add("hidden");
+        document.getElementById("mainArea").classList.remove("hidden");
+        loadAll();
+    }else{
+        document.getElementById("loginTip").textContent = "密码错误";
+        document.getElementById("loginTip").className = "status err";
+    }
+}
+function doLogout(){
+    loggedIn = false;
+    document.getElementById("mainArea").classList.add("hidden");
+    document.getElementById("loginBox").classList.remove("hidden");
+    document.getElementById("pwdInput").value = "";
+}
+
+async function loadAll(){ loadNotes(); loadPhotos(); loadSongs(); }
+
+async function loadNotes(){
+    const res = await fetch(API_NOTES);
+    const d = await res.json();
+    const box = document.getElementById("noteList");
+    if(!d.ok){ box.innerHTML = '<div class="status err">加载失败</div>'; return; }
+    box.innerHTML = "";
+    for(const n of d.notes){
+        const div = document.createElement("div");
+        div.className = "note-item";
+        div.innerHTML = `<button class="del" title="删除">✕</button>${n.text}${n.sign === "star" ? " ⭐" : n.sign === "fish" ? " 🐟" : ""}${n.pinned ? " 📌" : ""}`;
+        div.querySelector(".del").onclick = async () => {
+            if(!confirm("确认删除这条留言？")) return;
+            await fetch(API_NOTES + "?mode=del", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id: n.id }) });
+            loadNotes();
+        };
+        box.appendChild(div);
+    }
+}
+
+async function addNote(){
+    const text = document.getElementById("noteText").value.trim();
+    if(!text){ setStatus("noteStatus","请输入留言内容",true); return; }
+    const body = {
+        text,
+        sign: document.getElementById("noteSign").value,
+        pinned: document.getElementById("notePin").checked
+    };
+    const res = await fetch(API_NOTES, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+    const d = await res.json();
+    if(d.ok){
+        setStatus("noteStatus","添加成功");
+        document.getElementById("noteText").value = "";
+        loadNotes();
+    }else{
+        setStatus("noteStatus","添加失败：" + (d.error || ""), true);
+    }
+}
+
+async function loadPhotos(){
+    const res = await fetch(API_PHOTOS);
+    const d = await res.json();
+    const box = document.getElementById("photoList");
+    if(!d.ok){ box.innerHTML = '<div class="status err">加载失败</div>'; return; }
+    box.innerHTML = '<div class="list"></div>';
+    const list = box.querySelector(".list");
+    for(const p of d.photos){
+        const div = document.createElement("div");
+        div.className = "list-item";
+        div.innerHTML = `<button class="del">✕</button><img src="${API_PHOTOS}?id=${p.id}"><div class="name">${p.album || "其他"}</div>`;
+        div.querySelector(".del").onclick = async () => {
+            if(!confirm("确认删除这张照片？")) return;
+            await fetch(API_PHOTOS + "?mode=del", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id: p.id }) });
+            loadPhotos();
+        };
+        list.appendChild(div);
+    }
+}
+
+async function uploadPhotos(){
+    const files = document.getElementById("photoFiles").files;
+    if(!files.length){ setStatus("photoStatus","请选择照片",true); return; }
+    const album = document.getElementById("photoAlbum").value;
+    for(const f of files){
+        setStatus("photoStatus",`上传 ${f.name}...`);
+        try{
+            const init = await fetch(API_PHOTOS + "?mode=init", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ size: f.size, type: f.type || "image/jpeg" }) });
+            const id = (await init.json()).id;
+            const urlRes = await fetch(API_PHOTOS + "?mode=init", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ size: f.size, type: f.type || "image/jpeg" }) });
+            const up = await urlRes.json();
+            await fetch(up.url, { method:"PUT", body: f, headers:{"content-type": f.type || "image/jpeg"} });
+            await fetch(API_PHOTOS + "?mode=finish", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id, name: f.name, type: f.type || "image/jpeg", album }) });
+        }catch(e){
+            setStatus("photoStatus","上传失败：" + e.message, true);
+        }
+    }
+    setStatus("photoStatus",`已上传 ${files.length} 张`);
+    document.getElementById("photoFiles").value = "";
+    loadPhotos();
+}
+
+async function loadSongs(){
+    const res = await fetch(API_SONGS);
+    const d = await res.json();
+    const box = document.getElementById("songList");
+    if(!d.ok){ box.innerHTML = '<div class="status err">加载失败</div>'; return; }
+    box.innerHTML = "";
+    for(const s of d.songs){
+        const div = document.createElement("div");
+        div.className = "list-item";
+        div.innerHTML = `<button class="del">✕</button><div class="name">🎵 ${s.name || s.id}</div>${s.lrc ? '<div class="name" style="color:#5a9a5a">有歌词</div>' : ''}`;
+        div.querySelector(".del").onclick = async () => {
+            if(!confirm("确认删除这首歌？")) return;
+            await fetch(API_SONGS + "?mode=del", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id: s.id }) });
+            loadSongs();
+        };
+        box.appendChild(div);
+    }
+}
+
+async function uploadSong(){
+    const mp3 = document.getElementById("songMp3").files[0];
+    if(!mp3){ setStatus("songStatus","请选择 mp3 文件",true); return; }
+    let lrcText = "";
+    const lrcFile = document.getElementById("songLrc").files[0];
+    if(lrcFile){ lrcText = await lrcFile.text(); }
+    const name = document.getElementById("songName").value.trim() || mp3.name.replace(/\.mp3$/i, "");
+    setStatus("songStatus",`上传 ${name}...`);
+    try{
+        const init = await fetch(API_SONGS + "?mode=init", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ size: mp3.size, type: mp3.type || "audio/mpeg" }) });
+        const up = await init.json();
+        await fetch(up.url, { method:"PUT", body: mp3, headers:{"content-type": mp3.type || "audio/mpeg"} });
+        await fetch(API_SONGS + "?mode=finish", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ id: up.id, name, lrc: lrcText }) });
+        setStatus("songStatus","上传成功");
+        document.getElementById("songMp3").value = "";
+        document.getElementById("songLrc").value = "";
+        document.getElementById("songName").value = "";
+        loadSongs();
+    }catch(e){ setStatus("songStatus","上传失败：" + e.message, true); }
+}
+
+function setStatus(id, msg, isErr){
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = "status" + (isErr ? " err" : msg ? " ok" : "");
+}
+
+// 回车登录
+document.getElementById("pwdInput").addEventListener("keydown", e => { if(e.key === "Enter") doLogin(); });
+</script>
+</body>
+</html>
