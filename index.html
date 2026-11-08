@@ -1318,6 +1318,71 @@
             font-variant-numeric:tabular-nums;
         }
 
+        /* ========== 进场页：虚化背景 + 居中头像与爱心 ========== */
+        body.intro-on{
+            overflow:hidden;
+        }
+        body.intro-on .container,
+        body.intro-on footer{
+            filter:blur(16px);
+            opacity:0.45;
+            pointer-events:none;
+            user-select:none;
+        }
+        .container,
+        footer{
+            transition:filter 0.65s ease, opacity 0.65s ease;
+        }
+        .intro-screen{
+            position:fixed;
+            inset:0;
+            z-index:120;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:radial-gradient(circle at 50% 45%, rgba(255,255,255,0.5) 0%, rgba(255,228,239,0.72) 65%);
+            backdrop-filter:blur(10px);
+            -webkit-backdrop-filter:blur(10px);
+            transition:opacity 0.65s ease;
+        }
+        .intro-screen.hide{
+            opacity:0;
+            pointer-events:none;
+        }
+        .intro-inner{
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            transform:scale(1.35);
+            transition:transform 0.65s ease, opacity 0.5s ease;
+        }
+        .intro-screen.hide .intro-inner{
+            transform:scale(1.55);
+            opacity:0;
+        }
+        .intro-inner .couple-cards{
+            margin-bottom:0;
+        }
+        .intro-tip{
+            margin-top:22px;
+            font-size:13px;
+            color:#c2889f;
+            letter-spacing:3px;
+            animation:introTipPulse 2.2s ease-in-out infinite;
+        }
+        @keyframes introTipPulse{
+            0%,100%{opacity:0.45;}
+            50%{opacity:0.9;}
+        }
+        @media (max-width:600px){
+            .intro-inner{
+                transform:scale(1.12);
+            }
+            .intro-screen.hide .intro-inner{
+                transform:scale(1.3);
+            }
+        }
+
         /* ========== 甜蜜数据看板 ========== */
         .stats-row{
             display:flex;
@@ -2634,6 +2699,48 @@
         }
 
         renderCoupleCards();
+
+        // ========== 进场页：虚化背景居中头像，点亮爱心后进入主页 ==========
+        let introActive = false;
+        function initIntro(){
+            const cards = document.getElementById("coupleCards");
+            if(!cards) return;
+            const screen = document.createElement("div");
+            screen.className = "intro-screen";
+            const inner = document.createElement("div");
+            inner.className = "intro-inner";
+            const tip = document.createElement("div");
+            tip.className = "intro-tip";
+            tip.textContent = "轻触爱心 · 进入我们的小世界";
+            screen.appendChild(inner);
+            inner.appendChild(cards);
+            inner.appendChild(tip);
+            document.body.appendChild(screen);
+            document.body.classList.add("intro-on");
+            introActive = true;
+            const heart = cards.querySelector(".heart-link");
+            if(heart){
+                heart.addEventListener("pointerdown", function(){
+                    if(!introActive) return;
+                    setTimeout(enterIntroHome, 900);
+                });
+            }
+            function enterIntroHome(){
+                if(!introActive) return;
+                introActive = false;
+                document.body.classList.remove("intro-on");
+                const header = document.querySelector(".header");
+                const h1 = header ? header.querySelector("h1") : null;
+                if(header){
+                    if(h1) header.insertBefore(cards, h1);
+                    else header.appendChild(cards);
+                }
+                screen.classList.add("hide");
+                window.scrollTo(0, 0);
+                setTimeout(()=> screen.remove(), 750);
+            }
+        }
+        initIntro();
         renderAnniversary();
         renderCountdown();
         renderSweetMoment();
