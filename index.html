@@ -3359,8 +3359,12 @@
             }else{
                 setBarMsg(lyricLines[0].text || "等待播放");
             }
+            syncNpArtistText(); // 歌词变了，卡片里的歌词位立即刷新
         }
+        // 歌词请求序号：快速切歌时丢弃上一首的迟到响应，避免覆盖当前歌词
+        let lyricReqToken = 0;
         async function loadLyric(lrcFileName){
+            const token = ++lyricReqToken;
             lyricLines = [];
             setBarMsg("加载歌词…");
             if(!lrcFileName || lrcFileName.trim()===""){
@@ -3370,9 +3374,18 @@
             try{
                 const resp = await fetch(lrcFileName.indexOf("api/") === 0 ? lrcFileName : ("music/" + lrcFileName));
                 if(!resp.ok) throw new Error("not found");
-                loadLyricText(await resp.text());
+                const text = await resp.text();
+                if(token !== lyricReqToken) return; // 已切歌，丢弃过期歌词
+                loadLyricText(text);
             }catch(err){
-                setBarMsg("歌词加载失败");
+                if(token !== lyricReqToken) return;
+                // 外挂 lrc 拉不到时，如果已经用内嵌歌词兜底了，就继续用内嵌的
+                if(lyricLines.length){
+                    updateSingleLyric(music.currentTime);
+                    syncNpArtistText();
+                }else{
+                    setBarMsg("歌词加载失败");
+                }
             }
         }
         // 歌词校准：按歌曲独立生效（在 loadSong 中切换）
@@ -3741,11 +3754,12 @@
         }
         function loadSongTags(song, src){
             if(!song || !src) return;
-            if(song.artist && song.cover) return; // 已配置完整，无需解析
+            // 命中缓存就重新应用一次（切歌会清空 lyricLines，这里负责把内嵌歌词补回来）
             if(songTagCache.has(src)){
                 applyId3Tags(song, songTagCache.get(src));
                 return;
             }
+            if(song.artist && song.cover && song.usltLyrics) return; // 已解析完整，无需重复请求
             songTagCache.set(src, false); // 先占位，避免重复请求
             fetchId3Bytes(src)
                 .then(function(buf){
@@ -3822,17 +3836,20 @@
         }
         function useEmbeddedLyric(song, text){
             if(!song || !text) return;
+            const timed = parseLrc(text); // 自带 [mm:ss] 时间轴时，不依赖音频是否加载成功
             function apply(){
                 if(getSongs()[currentSongIndex] !== song) return; // 已切歌，放弃
-                if(hasLrcSource(song)) return; // 有 .lrc 就不覆盖
-                let lines = parseLrc(text);
-                if(!lines.length) lines = buildStaticLyrics(text, music.duration);
+                // 外挂 .lrc 已经真正加载出来才让位；否则内嵌歌词照样兜底
+                if(hasLrcSource(song) && lyricLines.length) return;
+                const lines = timed.length ? timed : buildStaticLyrics(text, music.duration);
                 if(!lines.length) return;
                 lyricLines = lines;
                 lastLyricIdx = -1;
                 updateSingleLyric(music.currentTime);
+                syncNpArtistText();
             }
-            // readyState>=1 表示已经拿到这首新歌的元数据，否则等加载完成再算时间轴
+            if(timed.length){ apply(); return; }
+            // 纯文本歌词要按整曲时长均分，必须先拿到 duration
             if(music.readyState >= 1 && isFinite(music.duration) && music.duration > 0) apply();
             else music.addEventListener("loadedmetadata", apply, { once: true });
         }
@@ -3872,8 +3889,8 @@
             const song = getSongs()[currentSongIndex];
             const idx = lastLyricIdx >= 0 ? lastLyricIdx : 0;
             let line = "";
-            // 开播且这首有歌词时，用当前歌词顶替歌手名；那句为空（间奏）时显示 ♪
-            if(lyricLines.length && (music.currentTime > 0 || !music.paused)){
+            // 只要有歌词就顶替歌手名显示当前句（暂停/刚切歌也能看到），空句显示 ♪
+            if(lyricLines.length){
                 line = String((lyricLines[idx] || {}).text || "").trim() || "♪";
             }
             if(line){
@@ -3934,8 +3951,9 @@
                     if(i !== currentSongIndex){
                         currentSongIndex = i;
                         loadSong(i);
-                        music.play().catch(function(){});
-                        setPlayIcon("⏸");
+                        safePlay();
+                    }else if(music.paused){
+                        safePlay(); // 点的是当前这首：暂停状态下直接续播
                     }
                 };
                 plistList.appendChild(item);
@@ -3994,7 +4012,7 @@
             // 只有外挂 .lrc 才套用按歌名的校准；内嵌 USLT 歌词自带准确时间轴
             const hasLrcCfg = !!(song.lrcText || song.hasLrc || song.lrcPath);
             const namedCalib = hasLrcCfg ? (LRC_CALIB_BY_NAME[song.showName] || null) : null;
-            activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : (namedCalib ? namedCalib.offset : 0.5);
+            activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : (namedCalib ? namedCalib.offset : (hasLrcCfg ? 0.5 : 0));
             activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : (namedCalib ? namedCalib.scale : 1);
             activeLrcCalib = Array.isArray(song.lrcCalib) ? song.lrcCalib : (namedCalib ? namedCalib.calib : null);
             if(song.remote){
@@ -4002,6 +4020,8 @@
                 music.src = currentMusicSrc;
                 if(song.lrcText){ loadLyricText(song.lrcText); }
                 else{ loadLyric(song.hasLrc ? ("api/songs?lrc=" + song.id) : ""); }
+                // loadLyric 会先清空 lyricLines：之前解析过的内嵌歌词要立刻补回来，否则切歌后歌词就没了
+                if(song.usltLyrics) useEmbeddedLyric(song, song.usltLyrics);
                 refreshNowPlaying();
                 loadSongTags(song, currentMusicSrc);
                 return;
@@ -4039,13 +4059,17 @@
             musicBtn.innerText = txt;
             barPlayBtn.innerText = txt;
         }
+        // 统一播放调用：失败时把图标恢复成 ▶，避免「显示在播但实际没播、歌词也不动」的假状态
+        function safePlay(){
+            setPlayIcon("⏸");
+            const p = music.play();
+            if(p && typeof p.catch === "function"){
+                p.catch(function(){ setPlayIcon("▶"); });
+            }
+        }
         musicBtn.onclick = ()=>{
             if(music.paused){
-                music.play().catch(err=>{
-                    // 浏览器自动播放策略限制，静默处理，用户再次点击即可
-                    setPlayIcon("▶");
-                });
-                setPlayIcon("⏸");
+                safePlay();
             }else{
                 music.pause();
                 setPlayIcon("▶");
@@ -4055,22 +4079,19 @@
             currentSongIndex--;
             if(currentSongIndex < 0) currentSongIndex = getSongs().length -1;
             loadSong(currentSongIndex);
-            music.play().catch(e=>{});
-            setPlayIcon("⏸");
+            safePlay();
         }
         nextBtn.onclick = ()=>{
             currentSongIndex++;
             if(currentSongIndex >= getSongs().length) currentSongIndex = 0;
             loadSong(currentSongIndex);
-            music.play().catch(e=>{});
-            setPlayIcon("⏸");
+            safePlay();
         }
         music.onended = function(){
             currentSongIndex++;
             if(currentSongIndex >= getSongs().length) currentSongIndex = 0;
             loadSong(currentSongIndex);
-            music.play().catch(e=>{});
-            setPlayIcon("⏸");
+            safePlay();
         }
         volumeSlider.oninput = function(){
             music.volume = this.value;
@@ -4119,8 +4140,9 @@
                     if(i !== currentSongIndex){
                         currentSongIndex = i;
                         loadSong(i);
-                        music.play().catch(e=>{});
-                        setPlayIcon("⏸");
+                        safePlay();
+                    }else if(music.paused){
+                        safePlay(); // 点的是当前这首：暂停状态下直接续播
                     }
                     showBarControls();
                 };
