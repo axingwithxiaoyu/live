@@ -1721,13 +1721,44 @@
         .sweet-moment .sm-change:hover{
             color:#ff6d94;
         }
-        .sweet-moment img{
-            width:100%;
+        .sweet-moment .sm-grid{
+            display:grid;
+            grid-template-columns:2fr 1fr;
+            grid-template-rows:1fr 1fr;
+            gap:8px;
             height:300px;
+        }
+        .sweet-moment .sm-grid img{
+            width:100%;
+            height:100%;
             object-fit:cover;
             border-radius:12px;
             display:block;
             cursor:pointer;
+            transition:transform 0.3s ease;
+        }
+        .sweet-moment .sm-grid img:hover{
+            transform:scale(1.02);
+        }
+        .sweet-moment .sm-grid .sm-big{
+            grid-row:1 / 3;
+        }
+        /* 只有 1~2 张照片时，大图占满整个网格 */
+        .sweet-moment .sm-grid.sm-count-1{
+            grid-template-columns:1fr;
+            grid-template-rows:1fr;
+        }
+        .sweet-moment .sm-grid.sm-count-1 .sm-big{
+            grid-row:auto;
+        }
+        .sweet-moment .sm-grid.sm-count-2{
+            grid-template-rows:1fr;
+        }
+        .sweet-moment .sm-grid.sm-count-2 .sm-big{
+            grid-row:auto;
+        }
+        @media (max-width:600px){
+            .sweet-moment .sm-grid{ height:220px; }
         }
 
         /* ========== 重要日子倒计时 ========== */
@@ -1791,6 +1822,65 @@
         .days-section{
             margin:0 0 60px;
         }
+
+        /* ========== 每日天气 ========== */
+        .weather-card{
+            max-width:600px;
+            margin:0 auto 30px;
+            background:linear-gradient(135deg,#fff,#fff4f8);
+            border-radius:16px;
+            padding:14px 18px;
+            box-shadow:0 4px 16px rgba(123,65,87,0.08);
+        }
+        .weather-card .wx-head{
+            font-size:14px;
+            font-weight:bold;
+            color:#7b4157;
+            margin-bottom:10px;
+        }
+        .weather-card .wx-list{
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            justify-content:center;
+        }
+        .weather-card .wx-item{
+            flex:1 1 180px;
+            display:flex;
+            align-items:center;
+            gap:10px;
+            background:#fff;
+            border-radius:12px;
+            padding:8px 14px;
+            border:1px solid #ffe3ec;
+        }
+        .weather-card .wx-icon{
+            font-size:30px;
+            line-height:1;
+        }
+        .weather-card .wx-info{
+            text-align:left;
+        }
+        .weather-card .wx-city{
+            font-size:13px;
+            color:#b0748c;
+        }
+        .weather-card .wx-temp{
+            font-size:18px;
+            font-weight:bold;
+            color:#ff6d94;
+            font-variant-numeric:tabular-nums;
+        }
+        .weather-card .wx-desc{
+            font-size:12px;
+            color:#a98494;
+        }
+        .weather-card .wx-tip{
+            margin-top:10px;
+            font-size:13px;
+            color:#e66895;
+            text-align:center;
+        }
     </style>
 </head>
 <body>
@@ -1812,12 +1902,21 @@
             <div class="stat-card"><div class="num" id="statPhotos">0</div><div class="lbl">相册瞬间</div></div>
             <div class="stat-card"><div class="num" id="statNotes">0</div><div class="lbl">留言祝福</div></div>
         </div>
+        <div class="weather-card" id="weatherCard" style="display:none">
+            <div class="wx-head">🌤️ 今日天气</div>
+            <div class="wx-list" id="wxList"></div>
+            <div class="wx-tip" id="wxTip"></div>
+        </div>
         <div class="sweet-moment" id="sweetMoment">
             <div class="sm-head">
                 <span class="sm-title">🍬 甜蜜瞬间</span>
                 <span class="sm-change" id="sweetChange">换一组 ↻</span>
             </div>
-            <img id="sweetImg" src="" alt="甜蜜瞬间">
+            <div class="sm-grid" id="sweetGrid">
+                <img id="sweetImgBig" class="sm-big" src="" alt="甜蜜瞬间">
+                <img id="sweetImgS1" src="" alt="甜蜜瞬间">
+                <img id="sweetImgS2" src="" alt="甜蜜瞬间">
+            </div>
         </div>
         <section class="days-section">
             <h2 class="block-title">📅 重要日子</h2>
@@ -1976,6 +2075,12 @@
         const startYear = 2026;
         const startMonth = 8;
         const startDay = 28;
+        // 每日天气城市：改成你们所在的城市（经纬度可在 https://open-meteo.com/en/docs/geocoding-api 查询）
+        // 两个人在两个城市就配两条，首页会并排显示
+        const WEATHER_CITIES = [
+            { name:"张家港", lat:31.88, lon:120.55 },
+            { name:"广州", lat:23.13, lon:113.26 }
+        ];
         const sweetEmojis = ["🍰","🍦","🍬","🍩","🧁","🍭"];
 
         // ========== 站点个性化配置 ==========
@@ -2379,7 +2484,7 @@
             if(!d || isNaN(d.getTime())) d = new Date(2026, 9, 29);
             return d.getFullYear() + "年" + (d.getMonth() + 1) + "月";
         }
-        // 按月份分组渲染留言：expand="first" 展开最前两组（服务器端新留言在前），"last" 展开最后两组（本地追加在尾部）
+        // 按月份分组渲染留言：expand="first" 默认展开第一组（最新月份），"last" 展开最后一组，其余折叠
         function renderGroupedNotes(list, buildCard, container, expand){
             const groups = [];
             const pos = {};
@@ -2389,7 +2494,7 @@
                 groups[pos[ym]].items.push({ item: item, idx: i });
             });
             groups.forEach((g, gi)=>{
-                const isOpen = false; // 默认全部折叠，点月份标题展开
+                const isOpen = (expand === "first" && gi === 0) || (expand === "last" && gi === groups.length - 1);
                 const groupDiv = document.createElement("div");
                 groupDiv.className = "month-group" + (isOpen ? "" : " collapsed");
                 const head = document.createElement("div");
@@ -2815,28 +2920,110 @@
             setNum("statNotes", staticNoteData.length + serverNotes.length);
         }
 
-        // 甜蜜瞬间（随机一张）
-        let sweetIdx = -1;
+        // 甜蜜瞬间（左边一张大的，右边两张小的，随机取三张）
+        let sweetIdxs = [];
         function renderSweetMoment(force){
-            const img = document.getElementById("sweetImg");
-            if(!img) return;
+            const grid = document.getElementById("sweetGrid");
+            const big = document.getElementById("sweetImgBig");
+            if(!grid || !big) return;
             const all = uploadedPhotos.concat(photoData);
             if(all.length === 0){
-                img.style.display = "none";
+                grid.style.display = "none";
                 return;
             }
-            img.style.display = "";
-            // 首次或点「换一组」时才随机换图，其余渲染保持当前这张
-            if(force || sweetIdx < 0 || sweetIdx >= all.length){
-                let next = Math.floor(Math.random() * all.length);
-                if(all.length > 1 && next === sweetIdx) next = (next + 1) % all.length;
-                sweetIdx = next;
+            grid.style.display = "";
+            const count = Math.min(3, all.length);
+            // 首次或点「换一组」时才随机换图，其余渲染保持当前这一组
+            if(force || sweetIdxs.length !== count || sweetIdxs.some(function(i){ return i >= all.length; })){
+                const used = {};
+                sweetIdxs = [];
+                for(let k = 0; k < count; k++){
+                    let n = Math.floor(Math.random() * all.length);
+                    let guard = 0;
+                    while(used[n] && guard < 30){ n = (n + 1) % all.length; guard++; }
+                    used[n] = 1;
+                    sweetIdxs.push(n);
+                }
             }
-            const p = all[sweetIdx];
-            img.src = p.src;
-            img.onerror = function(){ this.src = "https://picsum.photos/id/237/400/300"; };
-            img.onclick = ()=>{ lightImg.src = p.src; lightbox.classList.add("show"); };
+            grid.classList.remove("sm-count-1", "sm-count-2");
+            if(count === 1) grid.classList.add("sm-count-1");
+            else if(count === 2) grid.classList.add("sm-count-2");
+            const imgs = [big, document.getElementById("sweetImgS1"), document.getElementById("sweetImgS2")];
+            imgs.forEach(function(im, k){
+                if(!im) return;
+                if(k >= count){ im.style.display = "none"; return; }
+                im.style.display = "";
+                const p = all[sweetIdxs[k]];
+                im.src = p.src;
+                im.onerror = function(){ this.src = "https://picsum.photos/id/237/400/300"; };
+                im.onclick = ()=>{ lightImg.src = p.src; lightbox.classList.add("show"); };
+            });
         }
+
+        // ========== 每日天气（Open-Meteo 免费接口，无需密钥） ==========
+        function wxInfo(code){
+            if(code === 0) return { icon:"☀️", text:"晴" };
+            if(code === 1) return { icon:"🌤️", text:"少云" };
+            if(code === 2) return { icon:"⛅", text:"多云" };
+            if(code === 3) return { icon:"☁️", text:"阴" };
+            if(code === 45 || code === 48) return { icon:"🌫️", text:"雾" };
+            if(code >= 51 && code <= 57) return { icon:"🌦️", text:"毛毛雨" };
+            if(code >= 61 && code <= 67) return { icon:"🌧️", text:"雨" };
+            if(code >= 71 && code <= 77) return { icon:"🌨️", text:"雪" };
+            if(code >= 80 && code <= 82) return { icon:"🌦️", text:"阵雨" };
+            if(code === 85 || code === 86) return { icon:"🌨️", text:"阵雪" };
+            if(code >= 95) return { icon:"⛈️", text:"雷雨" };
+            return { icon:"🌥️", text:"多云" };
+        }
+        function wxAdvice(list){
+            // list: [{name, code, tmax, tmin}]，每个城市各给一句提示
+            const texts = list.map(function(x){
+                const c = x.code;
+                if(c >= 95) return "有雷雨，记得带伞 ☔";
+                if((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "有雨，记得带伞 ☔";
+                if((c >= 71 && c <= 77) || c === 85 || c === 86) return "有雪，注意保暖，路滑慢点走 🧣";
+                if(c === 45 || c === 48) return "有雾，出行注意安全";
+                if(isFinite(x.tmax) && x.tmax >= 33) return "很热，注意补水防晒 🧊";
+                if(isFinite(x.tmin) && x.tmin <= 0) return "很冷，多穿一点 🧥";
+                return "天气不错，愿你有好心情 💕";
+            });
+            // 提示相同就合并成一句（不带城市名），不同才按城市分开说
+            if(texts.every(function(t){ return t === texts[0]; })) return texts[0];
+            return list.map(function(x, i){ return x.name + texts[i]; }).join("，");
+        }
+        async function renderWeather(){
+            const card = document.getElementById("weatherCard");
+            const box = document.getElementById("wxList");
+            if(!card || !box || !WEATHER_CITIES.length) return;
+            const rows = [];
+            const summary = [];
+            for(const c of WEATHER_CITIES){
+                try{
+                    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat + "&longitude=" + c.lon
+                        + "&current=temperature_2m,weather_code,relative_humidity_2m"
+                        + "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1";
+                    const d = await (await fetch(url)).json();
+                    if(!d || !d.current) continue;
+                    const info = wxInfo(d.current.weather_code);
+                    const tmax = d.daily && d.daily.temperature_2m_max ? Math.round(d.daily.temperature_2m_max[0]) : null;
+                    const tmin = d.daily && d.daily.temperature_2m_min ? Math.round(d.daily.temperature_2m_min[0]) : null;
+                    const range = (tmax !== null && tmin !== null) ? (tmin + "° ~ " + tmax + "°") : "";
+                    rows.push(
+                        '<div class="wx-item"><div class="wx-icon">' + info.icon + '</div>'
+                        + '<div class="wx-info"><div class="wx-city">' + escHtml(c.name) + ' · ' + info.text + '</div>'
+                        + '<div class="wx-temp">' + Math.round(d.current.temperature_2m) + '°C</div>'
+                        + '<div class="wx-desc">' + range + (d.current.relative_humidity_2m != null ? " · 湿度 " + d.current.relative_humidity_2m + "%" : "") + '</div></div></div>'
+                    );
+                    summary.push({ name: c.name, code: d.current.weather_code, tmax: tmax, tmin: tmin });
+                }catch(e){ /* 某个城市请求失败就跳过，不影响其他 */ }
+            }
+            if(!rows.length) return; // 全部失败就不显示卡片
+            box.innerHTML = rows.join("");
+            const tip = document.getElementById("wxTip");
+            if(tip) tip.textContent = wxAdvice(summary);
+            card.style.display = "";
+        }
+        renderWeather();
 
         // ========== 重要日子：周年纪念 ==========
         function nextAnniversary(){
