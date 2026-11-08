@@ -943,30 +943,24 @@
         }
         .person{
             background:#fff;
-            border-radius:18px;
-            padding:16px 22px;
-            min-width:148px;
+            border-radius:50%;
+            padding:6px;
             text-align:center;
             box-shadow:0 4px 16px rgba(123,65,87,0.08);
         }
         .person .avatar{
-            width:64px;
-            height:64px;
-            line-height:64px;
+            width:88px;
+            height:88px;
             border-radius:50%;
-            margin:0 auto 10px;
-            font-size:30px;
+            margin:0 auto;
+            overflow:hidden;
             background:linear-gradient(135deg,#ffe3ec,#ffd0e0);
         }
-        .person .p-name{
-            font-size:17px;
-            font-weight:bold;
-            color:#7b4157;
-            margin-bottom:4px;
-        }
-        .person .p-bday{
-            font-size:12px;
-            color:#b0748c;
+        .person .avatar img{
+            width:100%;
+            height:100%;
+            object-fit:cover;
+            display:block;
         }
         .heart-link{
             font-size:26px;
@@ -1268,10 +1262,10 @@
         const sweetEmojis = ["🍰","🍦","🍬","🍩","🧁","🍭"];
 
         // ========== 站点个性化配置 ==========
-        // 双人档案卡：emoji 头像、昵称、生日（birthday 形如 "2000.05.13"，留空则不显示生日行）
+        // 双人档案卡：avatar 头像图片路径（留空则不显示图）；birthday 形如 "2000.05.13"，留空则不参与生日倒计时
         const COUPLE_PEOPLE = [
-            { name:"星星", emoji:"⭐", birthday:"" },
-            { name:"小鱼", emoji:"🐟", birthday:"" }
+            { name:"星星", avatar:"img/avatar-left.jpg", birthday:"" },
+            { name:"小鱼", avatar:"img/avatar-right.jpg", birthday:"" }
         ];
         // 固定阳历节日（name / emoji / 月-日）；生日会自动从 COUPLE_PEOPLE 里提取
         const SOLAR_DAYS = [
@@ -1910,9 +1904,10 @@
                 }
                 const div = document.createElement("div");
                 div.className = "person";
-                div.innerHTML = `<div class="avatar">${escHtml(p.emoji || "💗")}</div>
-                    <div class="p-name">${escHtml(p.name)}</div>
-                    ${p.birthday ? `<div class="p-bday">生日 ${escHtml(p.birthday)}</div>` : ""}`;
+                // 头像只放图片，不叠加文字
+                div.innerHTML = p.avatar
+                    ? `<div class="avatar"><img src="${escHtml(p.avatar)}" alt=""></div>`
+                    : "";
                 box.appendChild(div);
             });
         }
