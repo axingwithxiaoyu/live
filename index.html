@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我们的小世界</title>
+    <title>时光相册</title>
     <!-- Supabase SDK：GitHub Pages 备用站的共享后端（加载失败不影响 EdgeOne 版） -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -931,6 +931,194 @@
             font-size:36px;
             cursor:pointer;
         }
+
+        /* ========== 双人档案卡 ========== */
+        .couple-cards{
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:14px;
+            flex-wrap:wrap;
+            margin-bottom:24px;
+        }
+        .person{
+            background:#fff;
+            border-radius:18px;
+            padding:16px 22px;
+            min-width:148px;
+            text-align:center;
+            box-shadow:0 4px 16px rgba(123,65,87,0.08);
+        }
+        .person .avatar{
+            width:64px;
+            height:64px;
+            line-height:64px;
+            border-radius:50%;
+            margin:0 auto 10px;
+            font-size:30px;
+            background:linear-gradient(135deg,#ffe3ec,#ffd0e0);
+        }
+        .person .p-name{
+            font-size:17px;
+            font-weight:bold;
+            color:#7b4157;
+            margin-bottom:4px;
+        }
+        .person .p-bday{
+            font-size:12px;
+            color:#b0748c;
+        }
+        .heart-link{
+            font-size:26px;
+            color:#ff88aa;
+            animation:beat 1.4s ease-in-out infinite;
+        }
+        @keyframes beat{
+            0%,100%{transform:scale(1);}
+            50%{transform:scale(1.16);}
+        }
+        .sub-count{
+            font-size:14px;
+            color:#b0748c;
+            margin-top:10px;
+            letter-spacing:2px;
+            font-variant-numeric:tabular-nums;
+        }
+
+        /* ========== 甜蜜数据看板 ========== */
+        .stats-row{
+            display:flex;
+            gap:14px;
+            justify-content:center;
+            flex-wrap:wrap;
+            margin:10px 0 40px;
+        }
+        .stat-card{
+            background:#fff;
+            border-radius:16px;
+            padding:16px 26px;
+            text-align:center;
+            min-width:118px;
+            box-shadow:0 4px 16px rgba(123,65,87,0.08);
+        }
+        .stat-card .num{
+            font-size:26px;
+            font-weight:bold;
+            color:#ff6d94;
+            font-variant-numeric:tabular-nums;
+        }
+        .stat-card .lbl{
+            font-size:13px;
+            color:#b0748c;
+            margin-top:4px;
+        }
+
+        /* ========== 甜蜜瞬间 ========== */
+        .sweet-moment{
+            max-width:640px;
+            margin:0 auto 50px;
+            background:#fff;
+            border-radius:18px;
+            padding:14px;
+            box-shadow:0 6px 20px rgba(123,65,87,0.1);
+        }
+        .sweet-moment .sm-head{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            padding:2px 6px 10px;
+        }
+        .sweet-moment .sm-title{
+            font-size:15px;
+            font-weight:bold;
+            color:#7b4157;
+        }
+        .sweet-moment .sm-change{
+            font-size:13px;
+            color:#ff88aa;
+            cursor:pointer;
+            user-select:none;
+        }
+        .sweet-moment .sm-change:hover{
+            color:#ff6d94;
+        }
+        .sweet-moment img{
+            width:100%;
+            height:300px;
+            object-fit:cover;
+            border-radius:12px;
+            display:block;
+            cursor:pointer;
+        }
+        .sweet-moment .sm-cap{
+            font-size:14px;
+            color:#b0748c;
+            text-align:center;
+            padding:12px 8px 4px;
+            line-height:1.6;
+        }
+
+        /* ========== 重要日子倒计时 ========== */
+        .anniversary-card{
+            max-width:600px;
+            margin:0 auto 26px;
+            background:linear-gradient(135deg,#fff,#fff4f8);
+            border-radius:16px;
+            padding:18px 22px;
+            text-align:center;
+            box-shadow:0 4px 16px rgba(123,65,87,0.08);
+            font-size:15px;
+            color:#7b4157;
+        }
+        .anniversary-card .big{
+            font-size:30px;
+            font-weight:bold;
+            color:#ff6d94;
+            margin:0 6px;
+            font-variant-numeric:tabular-nums;
+        }
+        .cd-grid{
+            display:grid;
+            grid-template-columns:repeat(auto-fill,minmax(118px,1fr));
+            gap:10px;
+            max-width:780px;
+            margin:0 auto;
+        }
+        .cd-item{
+            background:#fff;
+            border-radius:12px;
+            padding:12px 8px;
+            text-align:center;
+            box-shadow:0 3px 12px rgba(123,65,87,0.07);
+        }
+        .cd-item .cd-emoji{
+            font-size:18px;
+            line-height:1;
+        }
+        .cd-item .cd-name{
+            font-size:12px;
+            color:#b0748c;
+            margin:6px 0 3px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .cd-item .cd-num{
+            font-size:15px;
+            font-weight:bold;
+            color:#ff6d94;
+            font-variant-numeric:tabular-nums;
+        }
+        .cd-item.today{
+            background:linear-gradient(135deg,#ff88aa,#ff6d94);
+        }
+        .cd-item.today .cd-name,
+        .cd-item.today .cd-num{
+            color:#fff;
+        }
+        .days-section{
+            margin:0 0 60px;
+        }
     </style>
 </head>
 <body>
@@ -939,9 +1127,24 @@
     <div class="petal-wrap" id="petalWrap"></div>
     <div class="container">
         <div class="header">
-            <h1>💌 我们的回忆相册</h1>
+            <div class="couple-cards" id="coupleCards"></div>
+            <h1>时光相册</h1>
             <div class="tip">从相爱那天起，已经一起走过</div>
             <div class="count-box" id="count">计算中...</div>
+            <div class="sub-count" id="countSub"></div>
+        </div>
+        <div class="stats-row">
+            <div class="stat-card"><div class="num" id="statDays">0</div><div class="lbl">相伴天数</div></div>
+            <div class="stat-card"><div class="num" id="statPhotos">0</div><div class="lbl">相册瞬间</div></div>
+            <div class="stat-card"><div class="num" id="statNotes">0</div><div class="lbl">留言祝福</div></div>
+        </div>
+        <div class="sweet-moment" id="sweetMoment">
+            <div class="sm-head">
+                <span class="sm-title">🍬 甜蜜瞬间</span>
+                <span class="sm-change" id="sweetChange">换一组 ↻</span>
+            </div>
+            <img id="sweetImg" src="" alt="甜蜜瞬间">
+            <div class="sm-cap" id="sweetCap"></div>
         </div>
         <div class="tab-wrap" id="tabWrap">
             <button class="tab-btn active" data-filter="all">全部</button>
@@ -951,6 +1154,11 @@
             <button class="tab-btn" data-filter="上传">最近上传</button>
         </div>
         <div class="gallery" id="galleryBox"></div>
+        <section class="days-section">
+            <h2 class="block-title">📅 重要日子</h2>
+            <div class="anniversary-card" id="anniCard"></div>
+            <div class="cd-grid" id="cdGrid"></div>
+        </section>
         <section class="note-wall">
             <h2 class="block-title">💛 留言墙</h2>
             <div class="note-input-area">
@@ -1058,6 +1266,33 @@
         const startMonth = 8;
         const startDay = 28;
         const sweetEmojis = ["🍰","🍦","🍬","🍩","🧁","🍭"];
+
+        // ========== 站点个性化配置 ==========
+        // 双人档案卡：emoji 头像、昵称、生日（birthday 形如 "2000.05.13"，留空则不显示生日行）
+        const COUPLE_PEOPLE = [
+            { name:"星星", emoji:"⭐", birthday:"" },
+            { name:"小鱼", emoji:"🐟", birthday:"" }
+        ];
+        // 固定阳历节日（name / emoji / 月-日）；生日会自动从 COUPLE_PEOPLE 里提取
+        const SOLAR_DAYS = [
+            { name:"元旦", emoji:"🎆", md:"01-01" },
+            { name:"情人节", emoji:"💕", md:"02-14" },
+            { name:"520", emoji:"💗", md:"05-20" },
+            { name:"儿童节", emoji:"🍭", md:"06-01" },
+            { name:"国庆节", emoji:"🎉", md:"10-01" },
+            { name:"万圣节", emoji:"🎃", md:"10-31" },
+            { name:"平安夜", emoji:"🔔", md:"12-24" },
+            { name:"圣诞节", emoji:"🎄", md:"12-25" }
+        ];
+        // 甜蜜瞬间的配文（随机轮换）
+        const SWEET_CAPTIONS = [
+            "不用刻意找话题，牵着你的手就很安心。",
+            "你在，咖啡在，时间也慢下来。",
+            "不是多么惊天动地，是每个普通早晨都想和你一起。",
+            "城市很大，但我只想和你慢慢逛。",
+            "把今天也好好收藏起来。",
+            "风景很美，更想把你写进以后的每一天。"
+        ];
 
         const photoData = [
             {src:"img/1.jpg", tags:["我的世界"]},
@@ -1428,6 +1663,7 @@
                 div.innerHTML = `<div class="note-text">${escHtml(n.content)}</div>`;
                 noteBox.appendChild(div);
             });
+            updateStats();
             if(serverMode){
                 const clsList = ["note-1","note-2","note-3","note-4"];
                 function buildServerCard(item){
@@ -1638,19 +1874,186 @@
             }
             if(tip) tip.textContent = "当前为本地留言模式（仅本机可见）";
         })();
-        // ========== 修复天数计算 ==========
+        // ========== 相伴天数（精确到秒，每秒刷新）==========
         function calcDay() {
+            const countEl = document.getElementById("count");
+            const subEl = document.getElementById("countSub");
+            if(!countEl) return;
             const start = new Date(startYear, startMonth - 1, startDay);
-            const now = new Date();
-            const diffMs = now - start;
-            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-            if(diffDays < 0){
-                document.getElementById("count").innerText = "日期设置错误";
-            }else{
-                document.getElementById("count").innerText = `❤️ ${diffDays} 天`;
+            const totalSec = Math.floor((new Date() - start) / 1000);
+            if(totalSec < 0){
+                countEl.innerText = "日期设置错误";
+                if(subEl) subEl.innerText = "";
+                return;
             }
+            const d = Math.floor(totalSec / 86400);
+            const h = Math.floor((totalSec % 86400) / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            countEl.innerText = `❤️ ${d} 天`;
+            if(subEl) subEl.innerText = `${h} 时 ${m} 分 ${s} 秒`;
         }
         calcDay();
+        setInterval(calcDay, 1000);
+
+        // ========== 双人档案卡 ==========
+        function renderCoupleCards(){
+            const box = document.getElementById("coupleCards");
+            if(!box) return;
+            box.innerHTML = "";
+            COUPLE_PEOPLE.forEach((p, i)=>{
+                if(i > 0){
+                    const heart = document.createElement("div");
+                    heart.className = "heart-link";
+                    heart.innerText = "♥";
+                    box.appendChild(heart);
+                }
+                const div = document.createElement("div");
+                div.className = "person";
+                div.innerHTML = `<div class="avatar">${escHtml(p.emoji || "💗")}</div>
+                    <div class="p-name">${escHtml(p.name)}</div>
+                    ${p.birthday ? `<div class="p-bday">生日 ${escHtml(p.birthday)}</div>` : ""}`;
+                box.appendChild(div);
+            });
+        }
+
+        // ========== 甜蜜数据看板 ==========
+        function updateStats(){
+            const start = new Date(startYear, startMonth - 1, startDay);
+            const days = Math.max(0, Math.floor((Date.now() - start) / 86400000));
+            const setNum = (id, v)=>{ const el = document.getElementById(id); if(el) el.innerText = v; };
+            setNum("statDays", days);
+            setNum("statPhotos", uploadedPhotos.length + photoData.length);
+            setNum("statNotes", staticNoteData.length + serverNotes.length);
+        }
+
+        // ========== 甜蜜瞬间（随机一张 + 配文）==========
+        let sweetIdx = -1;
+        function renderSweetMoment(force){
+            const img = document.getElementById("sweetImg");
+            const cap = document.getElementById("sweetCap");
+            if(!img) return;
+            const all = uploadedPhotos.concat(photoData);
+            if(all.length === 0){
+                img.style.display = "none";
+                if(cap) cap.innerText = "还没有照片，先上传一张吧～";
+                return;
+            }
+            img.style.display = "";
+            // 首次或点「换一组」时才随机换图，其余渲染保持当前这张
+            if(force || sweetIdx < 0 || sweetIdx >= all.length){
+                let next = Math.floor(Math.random() * all.length);
+                if(all.length > 1 && next === sweetIdx) next = (next + 1) % all.length;
+                sweetIdx = next;
+            }
+            const p = all[sweetIdx];
+            img.src = p.src;
+            img.onerror = function(){ this.src = "https://picsum.photos/id/237/400/300"; };
+            img.onclick = ()=>{ lightImg.src = p.src; lightbox.classList.add("show"); };
+            if(cap) cap.innerText = SWEET_CAPTIONS[sweetIdx % SWEET_CAPTIONS.length];
+        }
+
+        // ========== 重要日子：周年纪念 ==========
+        function nextAnniversary(){
+            const start = new Date(startYear, startMonth - 1, startDay);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let n = 1;
+            let d = new Date(start.getFullYear() + n, start.getMonth(), start.getDate());
+            while(d <= today){
+                n += 1;
+                d = new Date(start.getFullYear() + n, start.getMonth(), start.getDate());
+            }
+            return { n: n, date: d };
+        }
+        function renderAnniversary(){
+            const box = document.getElementById("anniCard");
+            if(!box) return;
+            const anni = nextAnniversary();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const left = Math.round((anni.date - today) / 86400000);
+            if(left === 0){
+                box.innerHTML = `💕 今天是我们的第 <span class="big">${anni.n}</span> 周年`;
+            }else{
+                box.innerHTML = `距离我们的第 <span class="big">${anni.n}</span> 周年还有：<span class="big">${left}</span> 天`;
+            }
+        }
+
+        // ========== 重要日子：节日 / 生日倒计时 ==========
+        function nextSolar(month, day){
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let d = new Date(today.getFullYear(), month - 1, day);
+            if(d < today) d = new Date(today.getFullYear() + 1, month - 1, day);
+            return d;
+        }
+        function nthWeekdayOfMonth(year, month, weekday, nth){
+            let d = new Date(year, month - 1, 1);
+            let count = 0;
+            while(d.getMonth() === month - 1){
+                if(d.getDay() === weekday){
+                    count++;
+                    if(count === nth) return new Date(d);
+                }
+                d.setDate(d.getDate() + 1);
+            }
+            return new Date(year, month - 1, 1);
+        }
+        function nextNthWeekday(month, weekday, nth){
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let d = nthWeekdayOfMonth(today.getFullYear(), month, weekday, nth);
+            if(d < today) d = nthWeekdayOfMonth(today.getFullYear() + 1, month, weekday, nth);
+            return d;
+        }
+        function collectDays(){
+            const list = [];
+            SOLAR_DAYS.forEach(h=>{
+                const parts = h.md.split("-").map(Number);
+                list.push({ name:h.name, emoji:h.emoji, date: nextSolar(parts[0], parts[1]) });
+            });
+            // 母亲节 = 5 月第二个周日；父亲节 = 6 月第三个周日
+            list.push({ name:"母亲节", emoji:"👩", date: nextNthWeekday(5, 0, 2) });
+            list.push({ name:"父亲节", emoji:"👨", date: nextNthWeekday(6, 0, 3) });
+            // 两人生日（从档案卡配置里取）
+            COUPLE_PEOPLE.forEach(p=>{
+                if(!p.birthday) return;
+                const seg = p.birthday.replace(/[-\/]/g, ".").split(".").filter(Boolean);
+                const mm = Number(seg[seg.length - 2]);
+                const dd = Number(seg[seg.length - 1]);
+                if(!mm || !dd) return;
+                list.push({ name: p.name + "生日", emoji:"🎂", date: nextSolar(mm, dd) });
+            });
+            return list;
+        }
+        function renderCountdown(){
+            const grid = document.getElementById("cdGrid");
+            if(!grid) return;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const items = collectDays().map(h=>{
+                h.left = Math.round((h.date - today) / 86400000);
+                return h;
+            }).sort((a, b)=> a.left - b.left);
+            grid.innerHTML = "";
+            items.forEach(h=>{
+                const div = document.createElement("div");
+                div.className = "cd-item" + (h.left === 0 ? " today" : "");
+                div.innerHTML = `<div class="cd-emoji">${h.emoji}</div>
+                    <div class="cd-name">${escHtml(h.name)}</div>
+                    <div class="cd-num">${h.left === 0 ? "今天 🎉" : h.left + " 天"}</div>`;
+                grid.appendChild(div);
+            });
+        }
+
+        renderCoupleCards();
+        renderAnniversary();
+        renderCountdown();
+        renderSweetMoment();
+        updateStats();
+        const sweetChangeBtn = document.getElementById("sweetChange");
+        if(sweetChangeBtn) sweetChangeBtn.onclick = ()=> renderSweetMoment(true);
         function renderGallery(filterKey){
             const galleryBox = document.getElementById('galleryBox');
             galleryBox.innerHTML = "";
@@ -1693,6 +2096,8 @@
                     lightbox.classList.add('show');
                 }
             })
+            updateStats();
+            renderSweetMoment();
         }
         document.querySelectorAll(".tab-btn").forEach(btn=>{
             btn.onclick = function(){
