@@ -2029,7 +2029,11 @@
         // GitHub Pages 版不走 COS（省外网下行流量费），音乐直接用仓库 music/ 目录；EdgeOne 版保持 COS 不变
         const MUSIC_CDN_BASE = location.hostname.indexOf("github.io") >= 0 ? "" : "https://live-music-1517594007.cos.ap-shanghai.myqcloud.com";
 
-        const songList = [
+        // GitHub Pages 备站 / 本地预览用仓库内的三首本地歌；
+        // EdgeOne 主站的三首已通过「上传」存进对象存储，这里留空避免歌单重复
+        const useLocalSongs = location.hostname.indexOf("github.io") >= 0 ||
+            location.hostname === "localhost" || location.hostname === "127.0.0.1";
+        const songList = useLocalSongs ? [
             // lrcOffset: 歌词偏移秒数（正数=提前，负数=延后）
             // lrcScale: 歌词时间轴缩放（校准快慢漂移）
             // lrcCalib: 分段锚点校准 [播放器秒, 对应歌词时间轴秒]，优先级最高
@@ -2037,7 +2041,11 @@
             {filePath:"bg2.mp3", showName:"小星星", lrcPath:"bg2.lrc", lrcOffset:0, lrcScale:1,
                 lrcCalib:[[0,0],[18.2,19],[94.4,95],[192.5,187],[196.9,196]]},
             {filePath:"bg3.mp3", showName:"像晴天像雨天", lrcPath:"bg3.lrc", lrcOffset:0.5, lrcScale:1}
-        ];
+        ] : [];
+        // 上传到对象存储的歌曲没有配置文件，按歌名沿用原来的歌词校准参数
+        const LRC_CALIB_BY_NAME = {
+            "小星星": { offset:0, scale:1, calib:[[0,0],[18.2,19],[94.4,95],[192.5,187],[196.9,196]] }
+        };
 
         let currentSongIndex = 0;
         let currentMusicSrc = "";
@@ -3123,6 +3131,7 @@
                     if(d && d.ok && Array.isArray(d.songs)){
                         edgeoneOk = true;
                         uploadedSongs = d.songs.map(s=>({remote:true, id:s.id, showName:s.name, hasLrc:!!s.hasLrc, ts: s.ts || 0, src: s.file ? (MUSIC_CDN_BASE + "/" + encodeURIComponent(s.file)) : ("api/songs?file=" + s.id)}));
+                        ensureSongLoaded();
                     }
                 }
                 if(edgeoneOk){ renderManage(); return; }
@@ -3147,6 +3156,7 @@
                     if(!sr.error && sr.data){
                         supaOk = true;
                         uploadedSongs = sr.data.map(s=>({ remote:true, id:s.id, showName:s.name, hasLrc:!!s.lrc, lrcText:s.lrc || "", ts: s.created_at ? new Date(s.created_at).getTime() : 0, src: supaUrl("songs", s.path) }));
+                        ensureSongLoaded();
                     }
                     // 至少一个表查询成功才认定 Supabase 可用，网络不通时保持本地模式
                     if(supaOk){ backendMode = "supabase"; renderManage(); }
@@ -3669,7 +3679,7 @@
             if(p >= end) return "";
             try{
                 const label = enc === 1 ? "utf-16" : (enc === 2 ? "utf-16be" : (enc === 3 ? "utf-8" : "iso-8859-1"));
-                return new TextDecoder(label).decode(bytes.subarray(p, end)).replace(/\0/g, "").trim();
+                return new TextDecoder(label).decode(bytes.subarray(p, end)).replace(/\uFEFF/g, "").replace(/\0/g, "").trim();
             }catch(e){
                 return "";
             }
@@ -3715,7 +3725,10 @@
             // 没有 .lrc 时用内嵌纯文本歌词兜底
             useEmbeddedLyric(song, tags.lyrics);
             if(!changed) return;
-            if(getSongs()[currentSongIndex] === song) updateNowPlayingInfo();
+            if(getSongs()[currentSongIndex] === song){
+                updateNowPlayingInfo();
+                syncNamedCalib(song);
+            }
             if(plistSection.classList.contains("show")) renderPlist();
         }
         function loadSongTags(song, src){
@@ -3726,15 +3739,7 @@
                 return;
             }
             songTagCache.set(src, false); // 先占位，避免重复请求
-            const rangeEnd = 786431; // 768KB，足够覆盖 ID3 标签与封面
-            fetch(src, { headers: { Range: "bytes=0-" + rangeEnd } })
-                .then(function(res){
-                    if(!res.ok) throw new Error("status " + res.status);
-                    // 服务器不支持 Range（返回整文件）且体积较大时放弃，避免浪费流量
-                    const len = Number(res.headers.get("content-length") || 0);
-                    if(res.status === 200 && len > 4 * 1024 * 1024) throw new Error("range unsupported");
-                    return res.arrayBuffer();
-                })
+            fetchId3Bytes(src)
                 .then(function(buf){
                     const tags = parseId3Tags(buf);
                     songTagCache.set(src, tags || false);
@@ -3744,6 +3749,55 @@
                     // 跨域限制 / 无标签 / 解析异常：保持默认封面与无歌手
                     songTagCache.set(src, false);
                 });
+        }
+        // 分段读取 ID3 标签区：EdgeOne 歌曲接口单次响应上限 900KB，
+        // 而部分歌曲内嵌封面很大（像晴天像雨天封面 1.8MB，歌词紧随其后），必须按窗口多次读取
+        const ID3_FIRST = 16 * 1024;      // 先读 16KB 拿到标签总长度
+        const ID3_WINDOW = 900 * 1024;    // 后续每次最多读 900KB
+        const ID3_MAX = 6 * 1024 * 1024;  // 标签区最多读 6MB
+        function fetchId3Bytes(src){
+            return (async function(){
+                const parts = [];
+                let got = 0;
+                let want = ID3_MAX;
+                while(got < want){
+                    const size = parts.length === 0 ? ID3_FIRST : ID3_WINDOW;
+                    let res = null;
+                    try{
+                        res = await fetch(src, { headers: { Range: "bytes=" + got + "-" + (got + size - 1) } });
+                    }catch(e){
+                        if(got > 0) break; // 网络中断：用已读到的部分继续解析
+                        throw e;
+                    }
+                    if(!res.ok){
+                        if(got > 0) break; // 已读到文件末尾（416）或后续请求失败
+                        throw new Error("status " + res.status);
+                    }
+                    const len = Number(res.headers.get("content-length") || 0);
+                    if(res.status === 200 && len > 16 * 1024 * 1024) throw new Error("range unsupported");
+                    const buf = await res.arrayBuffer();
+                    if(buf.byteLength === 0) break;
+                    parts.push(new Uint8Array(buf));
+                    got += buf.byteLength;
+                    if(parts.length === 1){
+                        // 不是 ID3v2 标签就不用继续读了
+                        const tagLen = id3TagLength(parts[0]);
+                        if(tagLen < 0) break;
+                        want = Math.min(tagLen, ID3_MAX);
+                    }
+                    if(buf.byteLength < size) break; // 服务端返回不足一窗，说明已到末尾
+                }
+                const all = new Uint8Array(got);
+                let pos = 0;
+                parts.forEach(function(p){ all.set(p, pos); pos += p.length; });
+                return all;
+            })();
+        }
+        // 标签总长度（含 10 字节头）；不是 ID3v2 返回 -1
+        function id3TagLength(bytes){
+            if(bytes.length < 10) return -1;
+            if(bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return -1;
+            return 10 + id3Syncsafe(bytes, 6);
         }
         // ===== 内嵌纯文本歌词兜底 =====
         // USLT 本身没有时间轴：这里按整曲时长把每行平均分布，歌词条随播放进度逐行推进；
@@ -3895,11 +3949,28 @@
         music.addEventListener("durationchange", syncProgress);
         music.addEventListener("timeupdate", syncProgress);
 
+        // 上传版歌曲的歌名可能晚于 loadSong 才从 ID3 解析出来，解析后按歌名补上校准参数
+        function syncNamedCalib(song){
+            const nc = LRC_CALIB_BY_NAME[(song && song.showName) || ""];
+            if(!nc || typeof song.lrcOffset === "number") return;
+            // 只有外挂 .lrc 才需要校准；内嵌 USLT 歌词本身时间轴就是准的
+            if(!(song.lrcText || song.hasLrc || song.lrcPath)) return;
+            if(activeLrcCalib === nc.calib && activeLrcOffset === nc.offset) return;
+            activeLrcOffset = nc.offset;
+            activeLrcScale = nc.scale;
+            activeLrcCalib = nc.calib;
+            lastLyricIdx = -1;
+            updateSingleLyric(music.currentTime);
+        }
         function loadSong(index){
             const song = getSongs()[index];
-            activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : 0.5;
-            activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : 1;
-            activeLrcCalib = Array.isArray(song.lrcCalib) ? song.lrcCalib : null;
+            if(!song) return; // 歌单为空（上传列表尚未返回）
+            // 只有外挂 .lrc 才套用按歌名的校准；内嵌 USLT 歌词自带准确时间轴
+            const hasLrcCfg = !!(song.lrcText || song.hasLrc || song.lrcPath);
+            const namedCalib = hasLrcCfg ? (LRC_CALIB_BY_NAME[song.showName] || null) : null;
+            activeLrcOffset = (typeof song.lrcOffset === "number") ? song.lrcOffset : (namedCalib ? namedCalib.offset : 0.5);
+            activeLrcScale = (typeof song.lrcScale === "number") ? song.lrcScale : (namedCalib ? namedCalib.scale : 1);
+            activeLrcCalib = Array.isArray(song.lrcCalib) ? song.lrcCalib : (namedCalib ? namedCalib.calib : null);
             if(song.remote){
                 currentMusicSrc = song.src || ("api/songs?file=" + song.id);
                 music.src = currentMusicSrc;
@@ -3916,6 +3987,15 @@
             loadSongTags(song, currentMusicSrc);
         }
         loadSong(currentSongIndex);
+
+        // 上传歌单是异步返回的：启动时歌单可能为空，等列表到位后补加载第一首
+        function ensureSongLoaded(){
+            const list = getSongs();
+            if(list.length === 0) return;
+            if(currentMusicSrc && list[currentSongIndex]) return; // 已经正常加载过
+            if(!list[currentSongIndex]) currentSongIndex = 0;
+            loadSong(currentSongIndex);
+        }
 
         // COS加速源加载失败时，自动回退到仓库本地音乐
         music.addEventListener("error", function(){
