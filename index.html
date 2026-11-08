@@ -1383,13 +1383,6 @@
             display:block;
             cursor:pointer;
         }
-        .sweet-moment .sm-cap{
-            font-size:14px;
-            color:#b0748c;
-            text-align:center;
-            padding:12px 8px 4px;
-            line-height:1.6;
-        }
 
         /* ========== 重要日子倒计时 ========== */
         .anniversary-card{
@@ -1479,7 +1472,6 @@
                 <span class="sm-change" id="sweetChange">换一组 ↻</span>
             </div>
             <img id="sweetImg" src="" alt="甜蜜瞬间">
-            <div class="sm-cap" id="sweetCap"></div>
         </div>
         <section class="days-section">
             <h2 class="block-title">📅 重要日子</h2>
@@ -1622,15 +1614,16 @@
         const sweetEmojis = ["🍰","🍦","🍬","🍩","🧁","🍭"];
 
         // ========== 站点个性化配置 ==========
-        // 双人档案卡：avatar 头像图片路径（留空则不显示图）；birthday 形如 "2000.05.13"，留空则不参与生日倒计时
+        // 双人档案卡：avatar 头像路径；lunarBirthday 为农历生日（month 月 / day 日）
         const COUPLE_PEOPLE = [
-            { name:"星星", avatar:"img/avatar-left.jpg", birthday:"" },
-            { name:"小鱼", avatar:"img/avatar-right.jpg", birthday:"" }
+            { name:"星星", avatar:"img/avatar-left.jpg", lunarBirthday:{ month:11, day:8 } },
+            { name:"小鱼", avatar:"img/avatar-right.jpg", lunarBirthday:{ month:7, day:11 } }
         ];
-        // 固定阳历节日（name / emoji / 月-日）；生日会自动从 COUPLE_PEOPLE 里提取
+        // 固定阳历节日（name / emoji / 月-日）
         const SOLAR_DAYS = [
             { name:"元旦", emoji:"🎆", md:"01-01" },
             { name:"情人节", emoji:"💕", md:"02-14" },
+            { name:"劳动节", emoji:"🛠️", md:"05-01" },
             { name:"520", emoji:"💗", md:"05-20" },
             { name:"儿童节", emoji:"🍭", md:"06-01" },
             { name:"国庆节", emoji:"🎉", md:"10-01" },
@@ -1638,14 +1631,11 @@
             { name:"平安夜", emoji:"🔔", md:"12-24" },
             { name:"圣诞节", emoji:"🎄", md:"12-25" }
         ];
-        // 甜蜜瞬间的配文（随机轮换）
-        const SWEET_CAPTIONS = [
-            "不用刻意找话题，牵着你的手就很安心。",
-            "你在，咖啡在，时间也慢下来。",
-            "不是多么惊天动地，是每个普通早晨都想和你一起。",
-            "城市很大，但我只想和你慢慢逛。",
-            "把今天也好好收藏起来。",
-            "风景很美，更想把你写进以后的每一天。"
+        // 农历节日（春节 / 端午 / 中秋）；清明节是节气，单独计算
+        const LUNAR_DAYS = [
+            { name:"春节", emoji:"🧨", m:1, d:1 },
+            { name:"端午节", emoji:"🐲", m:5, d:5 },
+            { name:"中秋节", emoji:"🥮", m:8, d:15 }
         ];
 
         const photoData = [
@@ -2442,16 +2432,14 @@
             setNum("statNotes", staticNoteData.length + serverNotes.length);
         }
 
-        // ========== 甜蜜瞬间（随机一张 + 配文）==========
+        // 甜蜜瞬间（随机一张）
         let sweetIdx = -1;
         function renderSweetMoment(force){
             const img = document.getElementById("sweetImg");
-            const cap = document.getElementById("sweetCap");
             if(!img) return;
             const all = uploadedPhotos.concat(photoData);
             if(all.length === 0){
                 img.style.display = "none";
-                if(cap) cap.innerText = "还没有照片，先上传一张吧～";
                 return;
             }
             img.style.display = "";
@@ -2465,7 +2453,6 @@
             img.src = p.src;
             img.onerror = function(){ this.src = "https://picsum.photos/id/237/400/300"; };
             img.onclick = ()=>{ lightImg.src = p.src; lightbox.classList.add("show"); };
-            if(cap) cap.innerText = SWEET_CAPTIONS[sweetIdx % SWEET_CAPTIONS.length];
         }
 
         // ========== 重要日子：周年纪念 ==========
@@ -2522,23 +2509,107 @@
             if(d < today) d = nthWeekdayOfMonth(today.getFullYear() + 1, month, weekday, nth);
             return d;
         }
+
+        // ========== 农历换算（1900-2100 农历数据表）==========
+        const LUNAR_INFO = [
+            0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
+            0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
+            0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
+            0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
+            0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
+            0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,
+            0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
+            0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,
+            0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
+            0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,
+            0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
+            0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
+            0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
+            0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
+            0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
+            0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,0x1a6c4,0x0aae0,
+            0x092e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,
+            0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,
+            0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,
+            0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,
+            0x0d520
+        ];
+        function lunarLeapMonth(y){
+            return LUNAR_INFO[y - 1900] & 0xf;
+        }
+        function lunarLeapDays(y){
+            if(lunarLeapMonth(y)) return (LUNAR_INFO[y - 1900] & 0x10000) ? 30 : 29;
+            return 0;
+        }
+        function lunarMonthDays(y, m){
+            return (LUNAR_INFO[y - 1900] & (0x10000 >> m)) ? 30 : 29;
+        }
+        function lunarYearDays(y){
+            let sum = 348;
+            for(let i = 0x8000; i > 0x8; i >>= 1) sum += (LUNAR_INFO[y - 1900] & i) ? 1 : 0;
+            return sum + lunarLeapDays(y);
+        }
+        // 农历某年某月某日 -> 公历 Date
+        function lunarToSolar(y, m, d){
+            let offset = 0;
+            for(let i = 1900; i < y; i++) offset += lunarYearDays(i);
+            const leap = lunarLeapMonth(y);
+            for(let i = 1; i < m; i++){
+                offset += lunarMonthDays(y, i);
+                if(leap && i === leap) offset += lunarLeapDays(y);
+            }
+            offset += d - 1;
+            const date = new Date(1900, 0, 31);
+            date.setDate(date.getDate() + offset);
+            return date;
+        }
+        // 农历月日 -> 下一个公历日期（今天算作今天）
+        function nextLunar(m, d){
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let date = lunarToSolar(today.getFullYear(), m, d);
+            date.setHours(0, 0, 0, 0);
+            if(date < today){
+                date = lunarToSolar(today.getFullYear() + 1, m, d);
+                date.setHours(0, 0, 0, 0);
+            }
+            return date;
+        }
+        // 清明（第 5 个节气）的公历日期，用通用节气公式计算
+        const SOLAR_TERM_INFO = [0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+        function qingmingDay(y){
+            const diff = 31556925974.7 * (y - 1900) + SOLAR_TERM_INFO[6] * 60000;
+            return new Date(Date.UTC(1900, 0, 6, 2, 5) + diff).getUTCDate();
+        }
+        function nextQingming(){
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let date = new Date(today.getFullYear(), 3, qingmingDay(today.getFullYear()));
+            date.setHours(0, 0, 0, 0);
+            if(date < today){
+                date = new Date(today.getFullYear() + 1, 3, qingmingDay(today.getFullYear() + 1));
+                date.setHours(0, 0, 0, 0);
+            }
+            return date;
+        }
+
         function collectDays(){
             const list = [];
             SOLAR_DAYS.forEach(h=>{
                 const parts = h.md.split("-").map(Number);
                 list.push({ name:h.name, emoji:h.emoji, date: nextSolar(parts[0], parts[1]) });
             });
-            // 母亲节 = 5 月第二个周日；父亲节 = 6 月第三个周日
-            list.push({ name:"母亲节", emoji:"👩", date: nextNthWeekday(5, 0, 2) });
-            list.push({ name:"父亲节", emoji:"👨", date: nextNthWeekday(6, 0, 3) });
-            // 两人生日（从档案卡配置里取）
+            // 农历节日
+            LUNAR_DAYS.forEach(h=>{
+                list.push({ name:h.name, emoji:h.emoji, date: nextLunar(h.m, h.d) });
+            });
+            // 清明节（节气）
+            list.push({ name:"清明节", emoji:"🌿", date: nextQingming() });
+            // 两人生日（农历）
             COUPLE_PEOPLE.forEach(p=>{
-                if(!p.birthday) return;
-                const seg = p.birthday.replace(/[-\/]/g, ".").split(".").filter(Boolean);
-                const mm = Number(seg[seg.length - 2]);
-                const dd = Number(seg[seg.length - 1]);
-                if(!mm || !dd) return;
-                list.push({ name: p.name + "生日", emoji:"🎂", date: nextSolar(mm, dd) });
+                const lb = p.lunarBirthday;
+                if(!lb) return;
+                list.push({ name: p.name + "生日", emoji:"🎂", date: nextLunar(lb.month, lb.day) });
             });
             return list;
         }
