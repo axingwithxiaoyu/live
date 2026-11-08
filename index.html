@@ -1845,14 +1845,43 @@
             justify-content:center;
         }
         .weather-card .wx-item{
-            flex:1 1 180px;
+            flex:1 1 220px;
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            background:#fff;
+            border-radius:12px;
+            padding:10px 14px;
+            border:1px solid #ffe3ec;
+        }
+        .weather-card .wx-now{
             display:flex;
             align-items:center;
             gap:10px;
-            background:#fff;
-            border-radius:12px;
-            padding:8px 14px;
-            border:1px solid #ffe3ec;
+        }
+        .weather-card .wx-hours{
+            display:flex;
+            justify-content:space-between;
+            gap:4px;
+            border-top:1px dashed #ffe3ec;
+            padding-top:8px;
+        }
+        .weather-card .wx-hour{
+            flex:1;
+            text-align:center;
+            font-size:11px;
+            color:#a98494;
+        }
+        .weather-card .wx-hour .hh-icon{
+            display:block;
+            font-size:16px;
+            line-height:1.4;
+        }
+        .weather-card .wx-hour .hh-temp{
+            display:block;
+            font-weight:bold;
+            color:#ff6d94;
+            font-variant-numeric:tabular-nums;
         }
         .weather-card .wx-icon{
             font-size:30px;
@@ -3001,6 +3030,7 @@
                 try{
                     const url = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat + "&longitude=" + c.lon
                         + "&current=temperature_2m,weather_code,relative_humidity_2m"
+                        + "&hourly=temperature_2m,weather_code"
                         + "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1";
                     const d = await (await fetch(url)).json();
                     if(!d || !d.current) continue;
@@ -3008,11 +3038,35 @@
                     const tmax = d.daily && d.daily.temperature_2m_max ? Math.round(d.daily.temperature_2m_max[0]) : null;
                     const tmin = d.daily && d.daily.temperature_2m_min ? Math.round(d.daily.temperature_2m_min[0]) : null;
                     const range = (tmax !== null && tmin !== null) ? (tmin + "° ~ " + tmax + "°") : "";
+                    // 逐小时预报：取 现在 / +3h / +6h / +9h 四个时段
+                    let hoursHtml = "";
+                    if(d.hourly && d.hourly.time && d.hourly.temperature_2m){
+                        const nowHour = new Date().getHours();
+                        const slots = [];
+                        for(let k = 0; k <= 9; k += 3){
+                            const h = nowHour + k;
+                            if(h < 24 && h < d.hourly.time.length && d.hourly.temperature_2m[h] != null){
+                                slots.push({
+                                    label: k === 0 ? "现在" : (h + "时"),
+                                    icon: wxInfo(d.hourly.weather_code[h]).icon,
+                                    temp: Math.round(d.hourly.temperature_2m[h]) + "°"
+                                });
+                            }
+                        }
+                        if(slots.length){
+                            hoursHtml = '<div class="wx-hours">' + slots.map(function(s){
+                                return '<div class="wx-hour">' + s.label
+                                    + '<span class="hh-icon">' + s.icon + '</span>'
+                                    + '<span class="hh-temp">' + s.temp + '</span></div>';
+                            }).join("") + '</div>';
+                        }
+                    }
                     rows.push(
-                        '<div class="wx-item"><div class="wx-icon">' + info.icon + '</div>'
+                        '<div class="wx-item"><div class="wx-now"><div class="wx-icon">' + info.icon + '</div>'
                         + '<div class="wx-info"><div class="wx-city">' + escHtml(c.name) + ' · ' + info.text + '</div>'
                         + '<div class="wx-temp">' + Math.round(d.current.temperature_2m) + '°C</div>'
                         + '<div class="wx-desc">' + range + (d.current.relative_humidity_2m != null ? " · 湿度 " + d.current.relative_humidity_2m + "%" : "") + '</div></div></div>'
+                        + hoursHtml + '</div>'
                     );
                     summary.push({ name: c.name, code: d.current.weather_code, tmax: tmax, tmin: tmin });
                 }catch(e){ /* 某个城市请求失败就跳过，不影响其他 */ }
