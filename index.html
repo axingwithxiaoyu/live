@@ -1536,6 +1536,24 @@
             object-fit:cover;
             display:block;
         }
+        /* 手机端：头像和爱心都收小，避免心电波形压到头像圈上 */
+        @media (max-width:600px){
+            .person .avatar{
+                width:76px;
+                height:76px;
+            }
+            .couple-cards{
+                gap:6px;
+            }
+            .heart-link{
+                font-size:21px;
+                padding:8px;
+            }
+            .ekg-wave{
+                width:44px;
+                height:26px;
+            }
+        }
         .heart-link{
             position:relative;
             font-size:26px;
@@ -1690,6 +1708,25 @@
             font-size:13px;
             color:#b0748c;
             margin-top:4px;
+        }
+        /* 手机端：三个统计卡收小，保持同一排不换行 */
+        @media (max-width:600px){
+            .stats-row{
+                gap:8px;
+                flex-wrap:nowrap;
+            }
+            .stat-card{
+                padding:10px 6px;
+                min-width:0;
+                flex:1;
+                border-radius:12px;
+            }
+            .stat-card .num{
+                font-size:20px;
+            }
+            .stat-card .lbl{
+                font-size:11px;
+            }
         }
 
         /* ========== 甜蜜瞬间 ========== */
