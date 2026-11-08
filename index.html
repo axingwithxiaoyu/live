@@ -825,6 +825,11 @@
             overflow:hidden;
             text-overflow:ellipsis;
         }
+        /* 歌手位置显示当前歌词时用更亮的粉色 */
+        .np-artist.is-lyric{
+            color:#e66895;
+            letter-spacing:0.3px;
+        }
         .np-range{
             -webkit-appearance:none;
             appearance:none;
@@ -2322,6 +2327,8 @@
                 const open = audioPanel.classList.toggle("music-open");
                 navMusicBtn.classList.toggle("active", open);
                 if(open){
+                    // 每次打开都从「封面卡片」起步，不沿用上次切到的歌词条模式
+                    if(isLyricBarMode && lyricToggleBtn) lyricToggleBtn.click();
                     syncBarLines();
                 }else{
                     plistSection.classList.remove("show");
@@ -3414,6 +3421,7 @@
             singleLyricDom.classList.remove("slide");
             void singleLyricDom.offsetWidth;
             singleLyricDom.classList.add("slide");
+            syncNpArtistText(); // 封面卡片里同步显示当前歌词
         }
         // 歌词行数随悬浮窗高度自适应：<78px 一行，>=110px 三行，其余两行
         let barLineCount = 2;
@@ -3855,11 +3863,29 @@
         function updateNowPlayingInfo(){
             const song = getSongs()[currentSongIndex];
             const nm = (song && song.showName) || "歌曲";
-            const artist = songArtist(song);
             npTitle.textContent = nm;
-            npArtist.textContent = artist;
-            npArtist.style.display = artist ? "" : "none";
+            syncNpArtistText();
             fillCover(npCover, song || { showName: nm });
+        }
+        // 封面卡片里原歌手名的位置：开播并有歌词后显示当前歌词，否则退回歌手名（没有歌手就留空）
+        function syncNpArtistText(){
+            const song = getSongs()[currentSongIndex];
+            const idx = lastLyricIdx >= 0 ? lastLyricIdx : 0;
+            let line = "";
+            // 开播且这首有歌词时，用当前歌词顶替歌手名；那句为空（间奏）时显示 ♪
+            if(lyricLines.length && (music.currentTime > 0 || !music.paused)){
+                line = String((lyricLines[idx] || {}).text || "").trim() || "♪";
+            }
+            if(line){
+                npArtist.textContent = line;
+                npArtist.style.display = "";
+                npArtist.classList.add("is-lyric");
+            }else{
+                const artist = songArtist(song);
+                npArtist.textContent = artist;
+                npArtist.style.display = artist ? "" : "none";
+                npArtist.classList.remove("is-lyric");
+            }
         }
         function refreshNowPlaying(){
             updateNowPlayingInfo();
