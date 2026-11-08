@@ -15,19 +15,15 @@
         }
         body {
             color: #7b4157;
-            padding: 30px 15px;
+            padding: 30px 15px 100px;
             position: relative;
             min-height: 100vh;
         }
-        /* 手机端预留顶部空间给音频面板 */
+        /* 手机端：底部预留空间给导航栏 */
         @media (max-width: 600px){
             body{
-                padding-top: 80px;
-            }
-            /* 放大缩放手柄，方便手指点按 */
-            .resize-handle{
-                width: 26px;
-                height: 26px;
+                padding-top: 30px;
+                padding-bottom: 100px;
             }
         }
         /* ========== 淡粉梦幻星空渐变背景 ========== */
@@ -620,23 +616,141 @@
             opacity: 1;
         }
 
-        /* =========音频面板【支持两种模式切换 + 缩放手柄】========= */
-        .audio-panel{
-            position: fixed;
-            top:20px;
-            right:20px;
-            background:#ffe6ee;
-            padding:14px 16px;
-            border-radius:18px;
-            box-shadow:0 3px 8px rgba(0,0,0,0.1);
-            z-index:10;
+        /* =========底部导航【默认隐藏，向下滑动后从底部出现】========= */
+        .page-section{
+            display:none;
+        }
+        .page-section.active{
+            display:block;
+        }
+        .dock-nav{
+            position:fixed;
+            left:50%;
+            bottom:calc(14px + env(safe-area-inset-bottom));
+            width:min(560px, calc(100% - 24px));
+            display:flex;
+            align-items:flex-end;
+            justify-content:space-around;
+            padding:10px 10px;
+            background:rgba(255,255,255,0.9);
+            backdrop-filter:blur(12px);
+            -webkit-backdrop-filter:blur(12px);
+            border-radius:22px;
+            box-shadow:0 8px 26px rgba(123,65,87,0.18);
+            z-index:12;
+            transform:translate(-50%, 110%);
+            opacity:0;
+            pointer-events:none;
+            transition:transform 0.35s cubic-bezier(0.22,0.61,0.36,1), opacity 0.28s ease;
+        }
+        .dock-nav.show{
+            transform:translate(-50%, 0);
+            opacity:1;
+            pointer-events:auto;
+        }
+        .nav-item{
+            flex:1;
             display:flex;
             flex-direction:column;
-            gap:12px;
-            transition: all 0.4s ease;
-            cursor:move;
+            align-items:center;
+            gap:4px;
+            padding:2px 0;
+            background:none;
+            border:none;
+            color:#b0748c;
+            font-size:12px;
+            cursor:pointer;
+            -webkit-tap-highlight-color:transparent;
+        }
+        .nav-ico{
+            width:34px;
+            height:34px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:50%;
+            font-size:18px;
+            line-height:1;
+            transition:background 0.25s ease, transform 0.25s ease;
+        }
+        .nav-item.active{
+            color:#ff4d7d;
+            font-weight:bold;
+        }
+        .nav-item.active .nav-ico{
+            background:#ffe0ea;
+            transform:scale(1.05);
+        }
+        /* 中间的音乐按钮：圆形凸起 */
+        .nav-music .nav-ico{
+            width:46px;
+            height:46px;
+            margin-top:-16px;
+            font-size:22px;
+            color:#fff;
+            background:linear-gradient(135deg,#ff9dbb,#ff5f8f);
+            box-shadow:0 6px 16px rgba(255,95,143,0.35);
+        }
+        .nav-music.active .nav-ico{
+            transform:scale(1.06);
+        }
+
+        /* =========音频面板【居中放大的悬浮窗：点底部导航"音乐"打开/关闭】========= */
+        .audio-panel{
+            position:fixed;
+            left:50%;
+            top:50%;
+            right:auto;
+            bottom:auto;
+            transform:translate(-50%,-50%);
+            width:min(460px, calc(100vw - 40px));
+            background:#ffe6ee;
+            padding:22px;
+            border-radius:22px;
+            box-shadow:0 12px 44px rgba(123,65,87,0.28);
+            z-index:30;
+            display:none;
+            flex-direction:column;
+            gap:16px;
             user-select:none;
             touch-action:none;
+        }
+        /* 打开状态：居中放大弹出 */
+        .audio-panel.music-open{
+            display:flex;
+            animation:musicPop 0.28s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes musicPop{
+            0%{opacity:0;transform:translate(-50%,-50%) scale(0.9);}
+            100%{opacity:1;transform:translate(-50%,-50%) scale(1);}
+        }
+        /* 歌词条模式不做居中弹出动画 */
+        .audio-panel.lyric-bar-mode.music-open{
+            animation:none;
+        }
+        /* 放大后的按钮/滑块（仅在居中弹窗模式生效，歌词条模式保持原大小） */
+        .audio-panel.music-open:not(.lyric-bar-mode) .audio-icon{
+            width:48px;
+            height:48px;
+            font-size:19px;
+        }
+        .audio-panel.music-open:not(.lyric-bar-mode) .play-main{
+            width:56px;
+            height:56px;
+            font-size:22px;
+        }
+        .audio-panel.music-open:not(.lyric-bar-mode) .volume-wrap input{
+            width:min(220px, 60%);
+        }
+        /* 弹窗模式默认隐藏拖拽/缩放/重置；歌词条模式恢复缩放手柄与"恢复默认大小"按钮 */
+        .audio-panel .resize-handle,
+        .audio-panel .reset-icon,
+        .audio-panel .adapt-icon{
+            display:none !important;
+        }
+        .audio-panel.lyric-bar-mode .resize-handle,
+        .audio-panel.lyric-bar-mode .adapt-icon{
+            display:block !important;
         }
         /*右下角缩放手柄*/
         .resize-handle{
@@ -703,7 +817,15 @@
         .audio-panel.lyric-bar-mode{
             flex-direction:row;
             align-items:center;
-            width:480px;
+            /* 歌词条：恢复自由悬浮，默认贴屏幕顶端居中，可拖动/缩放 */
+            left:0;
+            right:0;
+            margin:0 auto;
+            top:20px;
+            bottom:auto;
+            transform:none;
+            cursor:move;
+            width:min(480px, calc(100vw - 40px));
             height:84px;
             padding:0 14px;
             background:rgba(255,230,238,0.55);
@@ -942,11 +1064,182 @@
             margin-bottom:24px;
         }
         .person{
+            position:relative;
             background:#fff;
             border-radius:50%;
             padding:6px;
             text-align:center;
             box-shadow:0 4px 16px rgba(123,65,87,0.08);
+            transition:box-shadow 0.4s ease;
+        }
+        /* 爱心点亮时，头像投影加深 */
+        .couple-cards.glow .person{
+            box-shadow:0 6px 24px rgba(255,70,120,0.28);
+        }
+        .couple-cards.glow .person::after{
+            content:"";
+            position:absolute;
+            inset:-9px;
+            border-radius:50%;
+            z-index:-2;
+            box-shadow:0 0 26px rgba(255,80,130,0.55);
+            animation:glowPulse 2.2s ease-in-out infinite;
+        }
+        /* 头像框：粉色流光缎带 + 星芒 + 彗星（仅爱心点亮后出现） */
+        .af-svg{
+            position:absolute;
+            left:-7px;
+            top:-7px;
+            width:calc(100% + 14px);
+            height:calc(100% + 14px);
+            pointer-events:none;
+            overflow:visible;
+            opacity:0;
+            transform:scale(0.9);
+            transition:opacity 0.4s ease, transform 0.4s ease;
+        }
+        .couple-cards.glow .af-svg{
+            opacity:1;
+            transform:scale(1);
+        }
+        /* 完整光环：外圈厚光 + 白色内芯 + 绕环光点 */
+        .af-halo{
+            fill:none;
+            stroke:#ff88aa;
+            stroke-width:6;
+            opacity:0.55;
+            filter:blur(1.2px) drop-shadow(0 0 10px rgba(255,120,166,0.9));
+        }
+        .af-halo-core{
+            fill:none;
+            stroke:#fff4f8;
+            stroke-width:1.6;
+            opacity:0.95;
+            filter:drop-shadow(0 0 7px rgba(255,158,193,0.95));
+        }
+        .af-dot{
+            fill:#ffffff;
+            filter:drop-shadow(0 0 8px rgba(255,45,85,0.95));
+        }
+        /* 逆向缓慢移动的淡光，制造"环在转动"的感觉 */
+        .af-veil{
+            fill:none;
+            stroke:#ffb3cc;
+            stroke-width:9;
+            stroke-linecap:round;
+            opacity:0.3;
+            filter:blur(2.2px);
+        }
+        .af-veil-2{
+            opacity:0.18;
+            stroke-width:12;
+        }
+        .af-spin-rev{
+            transform-box:view-box;
+            transform-origin:60px 60px;
+            animation:afSpin 11s linear infinite reverse;
+        }
+        /* 浮动光斑 */
+        .af-orb{
+            fill:#ffe6ee;
+            opacity:0.5;
+            filter:blur(1.2px) drop-shadow(0 0 6px rgba(255,170,205,0.85));
+            animation:afOrb 4.2s ease-in-out infinite;
+        }
+        .af-orb.o2{animation-delay:0.9s;}
+        .af-orb.o3{animation-delay:1.8s;}
+        .af-orb.o4{animation-delay:2.6s;}
+        .af-orb.o5{animation-delay:3.4s;}
+        @keyframes afOrb{
+            0%,100%{opacity:0.25;transform:translateY(0);}
+            50%{opacity:0.75;transform:translateY(-3px);}
+        }
+        .af-star{
+            fill:#ffffff;
+            stroke:#ffc8d8;
+            stroke-width:0.6;
+            filter:drop-shadow(0 0 6px rgba(255,158,193,0.9));
+            animation:starTwinkle 2.4s ease-in-out infinite;
+        }
+        .af-star:nth-of-type(2){animation-delay:0.6s;}
+        .af-star:nth-of-type(3){animation-delay:1.2s;}
+        .af-star:nth-of-type(4){animation-delay:1.8s;}
+        .af-spin{
+            transform-box:view-box;
+            transform-origin:60px 60px;
+            animation:afSpin 5s linear infinite;
+        }
+        @keyframes afSpin{
+            to{transform:rotate(360deg);}
+        }
+        @keyframes starTwinkle{
+            0%,100%{opacity:0.5;}
+            50%{opacity:1;}
+        }
+        .couple-cards.glow .af-halo{
+            stroke:#ff5f8f;
+        }
+        @keyframes glowPulse{
+            0%,100%{opacity:0.35;}
+            50%{opacity:0.85;}
+        }
+        /* 爱心点亮时，头像上下浮动（左右同频同相） */
+        .couple-cards.glow .person{
+            animation:floatBob 2.6s ease-in-out infinite;
+        }
+        @keyframes floatBob{
+            0%,100%{transform:translateY(0);}
+            50%{transform:translateY(-10px);}
+        }
+        /* 心跳曲线：点亮后一条心电波形穿过爱心，光点沿线循环流动 */
+        .heart-link{
+            overflow:visible;
+        }
+        .ekg-wave{
+            position:absolute;
+            left:50%;
+            top:50%;
+            width:64px;
+            height:36px;
+            transform:translate(-50%,-50%);
+            opacity:0;
+            pointer-events:none;
+            transition:opacity 0.35s ease;
+        }
+        .heart-link.on .ekg-wave{
+            opacity:1;
+            animation:ekgIn 0.5s ease-out forwards;
+        }
+        .ekg-wave svg{
+            width:100%;
+            height:100%;
+            overflow:visible;
+        }
+        .ekg-base{
+            fill:none;
+            stroke:rgba(255,109,152,0.55);
+            stroke-width:2;
+            stroke-linecap:round;
+            stroke-linejoin:round;
+            filter:drop-shadow(0 0 5px rgba(255,110,150,0.5));
+        }
+        .ekg-pulse{
+            fill:none;
+            stroke:#ff2d55;
+            stroke-width:2.8;
+            stroke-linecap:round;
+            stroke-linejoin:round;
+            stroke-dasharray:16 159;
+            animation:ekgSweep 1.7s linear infinite;
+            filter:drop-shadow(0 0 8px rgba(255,45,85,0.9));
+        }
+        @keyframes ekgSweep{
+            from{stroke-dashoffset:16;}
+            to{stroke-dashoffset:-159;}
+        }
+        @keyframes ekgIn{
+            0%{opacity:0;transform:translate(-50%,-50%) scaleX(0.4);}
+            100%{opacity:1;transform:translate(-50%,-50%) scaleX(1);}
         }
         .person .avatar{
             width:100px;
@@ -963,9 +1256,55 @@
             display:block;
         }
         .heart-link{
+            position:relative;
             font-size:26px;
+            line-height:1;
+            padding:12px;
             color:#ff88aa;
+            cursor:pointer;
+            user-select:none;
+            -webkit-tap-highlight-color:transparent;
             animation:beat 1.4s ease-in-out infinite;
+            transition:color 0.25s ease, text-shadow 0.3s ease;
+        }
+        .heart-link.near{
+            color:#ff6d98;
+            text-shadow:0 0 14px rgba(255,120,160,0.65);
+        }
+        /* 爱心字形单独一层：便于放大而不与跳动动画冲突 */
+        .heart-glyph{
+            display:inline-block;
+            transition:transform 0.42s cubic-bezier(0.34,1.56,0.64,1), color 0.35s ease;
+        }
+        .heart-link.on .heart-glyph{
+            transform:scale(1.62);
+            color:#ff2d55;
+        }
+        .heart-link.on{
+            text-shadow:0 0 18px rgba(255,50,100,0.75);
+        }
+        .heart-link.burst{
+            animation:heartPop 0.34s ease-out;
+        }
+        @keyframes heartPop{
+            0%{transform:scale(1);}
+            45%{transform:scale(1.36);}
+            100%{transform:scale(1);}
+        }
+        /* 粒子层：溢出可见，不挡点击 */
+        .heart-particles{
+            position:absolute;
+            inset:0;
+            pointer-events:none;
+            overflow:visible;
+        }
+        .heart-particle{
+            position:absolute;
+            left:50%;
+            top:50%;
+            line-height:1;
+            will-change:transform,opacity;
+            text-shadow:0 0 6px rgba(255,150,185,0.55);
         }
         @keyframes beat{
             0%,100%{transform:scale(1);}
@@ -1120,9 +1459,11 @@
     <div class="meteor-bg" id="meteorBg"></div>
     <div class="petal-wrap" id="petalWrap"></div>
     <div class="container">
+        <!-- 主页 -->
+        <div class="page-section active" data-page="home">
         <div class="header">
+            <h1>我们的小世界</h1>
             <div class="couple-cards" id="coupleCards"></div>
-            <h1>时光相册</h1>
             <div class="tip">从相爱那天起，已经一起走过</div>
             <div class="count-box" id="count">计算中...</div>
             <div class="sub-count" id="countSub"></div>
@@ -1140,6 +1481,14 @@
             <img id="sweetImg" src="" alt="甜蜜瞬间">
             <div class="sm-cap" id="sweetCap"></div>
         </div>
+        <section class="days-section">
+            <h2 class="block-title">📅 重要日子</h2>
+            <div class="anniversary-card" id="anniCard"></div>
+            <div class="cd-grid" id="cdGrid"></div>
+        </section>
+        </div>
+        <!-- 相册 -->
+        <div class="page-section" data-page="album">
         <div class="tab-wrap" id="tabWrap">
             <button class="tab-btn active" data-filter="all">全部</button>
             <button class="tab-btn" data-filter="我的世界">我的世界</button>
@@ -1148,11 +1497,9 @@
             <button class="tab-btn" data-filter="上传">最近上传</button>
         </div>
         <div class="gallery" id="galleryBox"></div>
-        <section class="days-section">
-            <h2 class="block-title">📅 重要日子</h2>
-            <div class="anniversary-card" id="anniCard"></div>
-            <div class="cd-grid" id="cdGrid"></div>
-        </section>
+        </div>
+        <!-- 留言 -->
+        <div class="page-section" data-page="notes">
         <section class="note-wall">
             <h2 class="block-title">💛 留言墙</h2>
             <div class="note-input-area">
@@ -1170,8 +1517,11 @@
             </div>
             <div class="note-container" id="noteBox"></div>
         </section>
+        </div>
+        <!-- 上传 -->
+        <div class="page-section" data-page="upload">
         <section class="upload-section">
-            <details class="upload-panel">
+            <details class="upload-panel" open>
                 <summary>📁 我们的上传（照片 / 音乐）</summary>
                 <div class="upload-body">
                     <div class="upload-row">
@@ -1200,6 +1550,7 @@
                 </div>
             </details>
         </section>
+        </div>
         <div class="words">
             ✨ 写给我们：<br>
             很高兴和你相遇，
@@ -1216,6 +1567,15 @@
         <span class="lightbox-close">&times;</span>
         <img id="lightImg" src="" alt="大图">
     </div>
+
+    <!-- 底部导航：默认隐藏，向下滑动后从底部出现 -->
+    <nav class="dock-nav" id="dockNav">
+        <button class="nav-item active" data-page="home"><span class="nav-ico">🏠</span><span class="nav-lbl">主页</span></button>
+        <button class="nav-item" data-page="album"><span class="nav-ico">🖼</span><span class="nav-lbl">相册</span></button>
+        <button class="nav-item nav-music" id="navMusic"><span class="nav-ico">🎵</span><span class="nav-lbl">音乐</span></button>
+        <button class="nav-item" data-page="notes"><span class="nav-ico">💬</span><span class="nav-lbl">留言</span></button>
+        <button class="nav-item" data-page="upload"><span class="nav-ico">⬆</span><span class="nav-lbl">上传</span></button>
+    </nav>
 
     <!-- 音频面板：第一行播放按键，第二行音量+词按钮 -->
     <div class="audio-panel" id="audioPanel">
@@ -1565,6 +1925,47 @@
         const MIN_W = 160;
         const MIN_H = 80;
 
+        // ===== 底部导航：默认隐藏，向下滑动后出现；点击切换页面 =====
+        const dockNav = document.getElementById("dockNav");
+        const navMusicBtn = document.getElementById("navMusic");
+        const pageSections = document.querySelectorAll(".page-section");
+        const navPageBtns = dockNav ? dockNav.querySelectorAll(".nav-item[data-page]") : [];
+
+        function setActivePage(page){
+            pageSections.forEach(function(sec){
+                sec.classList.toggle("active", sec.dataset.page === page);
+            });
+            navPageBtns.forEach(function(btn){
+                btn.classList.toggle("active", btn.dataset.page === page);
+            });
+            // 切换后回到顶部，导航随之收起（继续下滑会再次出现）
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            // 页面内容不足一屏时无法滚动，导航保持可见，避免无法再切换
+            requestAnimationFrame(syncDockNav);
+        }
+
+        function syncDockNav(){
+            if(!dockNav) return;
+            const canScroll = document.documentElement.scrollHeight > window.innerHeight + 10;
+            dockNav.classList.toggle("show", window.scrollY > 90 || !canScroll);
+        }
+        window.addEventListener("scroll", syncDockNav, { passive: true });
+        window.addEventListener("resize", syncDockNav);
+        syncDockNav();
+
+        navPageBtns.forEach(function(btn){
+            btn.addEventListener("click", function(){
+                setActivePage(btn.dataset.page);
+            });
+        });
+        // 中间"音乐"：打开/关闭居中的音乐悬浮窗
+        if(navMusicBtn){
+            navMusicBtn.addEventListener("click", function(){
+                const open = audioPanel.classList.toggle("music-open");
+                navMusicBtn.classList.toggle("active", open);
+                if(open) syncBarLines();
+            });
+        }
         function saveUserNotes(){
             localStorage.setItem("loveNotes", JSON.stringify(userNotes));
         }
@@ -1899,17 +2300,136 @@
                 if(i > 0){
                     const heart = document.createElement("div");
                     heart.className = "heart-link";
-                    heart.innerText = "♥";
+                    // 左右镜像对称的心电波形，宽度控制在头像之间的空隙内
+                    const ekgPath = "M0,20 L4,20 Q6,15 8,20 L14,20 L16,7 L18,33 L20,20 L36,20 L44,20 L60,20 L62,33 L64,7 L66,20 L72,20 Q74,15 76,20 L80,20";
+                    heart.innerHTML = '<span class="ekg-wave"><svg viewBox="0 0 80 40" preserveAspectRatio="none"><path class="ekg-base" d="' + ekgPath + '"/><path class="ekg-pulse" d="' + ekgPath + '"/></svg></span><span class="heart-glyph">♥</span>';
+                    // 粒子层
+                    const layer = document.createElement("div");
+                    layer.className = "heart-particles";
+                    heart.appendChild(layer);
+                    bindHeartEffects(heart, layer);
                     box.appendChild(heart);
                 }
                 const div = document.createElement("div");
                 div.className = "person";
-                // 头像只放图片，不叠加文字
-                div.innerHTML = p.avatar
+                // 头像只放图片，不叠加文字；外圈为流光头像框
+                const frame = `<svg class="af-svg" viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="af-halo" cx="60" cy="60" r="55"></circle>
+                    <circle class="af-halo-core" cx="60" cy="60" r="55"></circle>
+                    <g class="af-spin-rev">
+                        <path class="af-veil" d="M60 5 A55 55 0 0 1 107.6 87.5"></path>
+                        <path class="af-veil af-veil-2" d="M60 115 A55 55 0 0 1 12.4 32.5"></path>
+                    </g>
+                    <g class="af-spin">
+                        <circle class="af-dot" cx="60" cy="5" r="2.4"></circle>
+                        <circle class="af-dot" cx="115" cy="60" r="1.8"></circle>
+                        <circle class="af-dot" cx="60" cy="115" r="2"></circle>
+                        <circle class="af-dot" cx="5" cy="60" r="1.6"></circle>
+                    </g>
+                    <circle class="af-orb o1" cx="42" cy="98" r="3.2"></circle>
+                    <circle class="af-orb o2" cx="78" cy="101" r="2.4"></circle>
+                    <circle class="af-orb o3" cx="60" cy="96" r="1.8"></circle>
+                    <circle class="af-orb o4" cx="24" cy="80" r="2"></circle>
+                    <circle class="af-orb o5" cx="98" cy="74" r="2.6"></circle>
+                    <path class="af-star" d="M60 -3 Q62.2 2.8 68 5 Q62.2 7.2 60 13 Q57.8 7.2 52 5 Q57.8 2.8 60 -3"></path>
+                    <path class="af-star" d="M115 54 Q116.6 58.4 121 60 Q116.6 61.6 115 66 Q113.4 61.6 109 60 Q113.4 58.4 115 54"></path>
+                    <path class="af-star" d="M60 110 Q61.4 113.6 65 115 Q61.4 116.4 60 120 Q58.6 116.4 55 115 Q58.6 113.6 60 110"></path>
+                    <path class="af-star" d="M5 54 Q6.6 58.4 11 60 Q6.6 61.6 5 66 Q3.4 61.6 -1 60 Q3.4 58.4 5 54"></path>
+                </svg>`;
+                div.innerHTML = (p.avatar
                     ? `<div class="avatar"><img src="${escHtml(p.avatar)}" alt=""></div>`
-                    : "";
+                    : "") + frame;
                 box.appendChild(div);
             });
+            initHeartFx();
+        }
+
+        // ========== 爱心粒子效果（鼠标靠近 + 点击）==========
+        const HEART_CHARS = ["♥", "♥", "♥", "✦", "❣"];
+        const HEART_COLORS = ["#ff88aa", "#ff6d98", "#ffb3cc", "#ffd6e4", "#ff5f8f"];
+        let heartFxBound = false;
+
+        function spawnHeartParticle(layer, opt){
+            if(!layer) return;
+            const o = opt || {};
+            const p = document.createElement("span");
+            p.className = "heart-particle";
+            p.textContent = o.char || HEART_CHARS[Math.floor(Math.random() * HEART_CHARS.length)];
+            p.style.color = o.color || HEART_COLORS[Math.floor(Math.random() * HEART_COLORS.length)];
+            p.style.fontSize = (o.size || (8 + Math.random() * 9)) + "px";
+            layer.appendChild(p);
+
+            const angle = o.angle != null ? o.angle : Math.random() * Math.PI * 2;
+            const dist = o.dist || (16 + Math.random() * 26);
+            const dx = Math.cos(angle) * dist;
+            const dy = Math.sin(angle) * dist - (o.rise || 0);
+            // 爱心点亮（变大）时，粒子飘得更慢、停留更久
+            const slow = layer.closest && layer.closest(".heart-link") && layer.closest(".heart-link").classList.contains("on");
+            const dur = (o.dur || (700 + Math.random() * 500)) * (slow ? 2.6 : 1);
+            const rot = (Math.random() * 2 - 1) * 45;
+
+            const anim = p.animate([
+                { transform: "translate(-50%,-50%) translate(0px, 0px) scale(0.3) rotate(0deg)", opacity: 0 },
+                { transform: `translate(-50%,-50%) translate(${dx * 0.55}px, ${dy * 0.55}px) scale(1) rotate(${rot * 0.5}deg)`, opacity: 0.95, offset: 0.3 },
+                { transform: `translate(-50%,-50%) translate(${dx}px, ${dy}px) scale(0.35) rotate(${rot}deg)`, opacity: 0 }
+            ], { duration: dur, easing: "cubic-bezier(0.22,0.61,0.36,1)" });
+            anim.onfinish = () => p.remove();
+            anim.oncancel = () => p.remove();
+        }
+
+        // 全局只挂一次：鼠标靠近到 100px 内就持续冒小粒子
+        function initHeartFx(){
+            if(heartFxBound) return;
+            heartFxBound = true;
+            let lastEmit = 0;
+            document.addEventListener("mousemove", function(e){
+                const heart = document.querySelector(".heart-link");
+                if(!heart) return;
+                const r = heart.getBoundingClientRect();
+                if(!r.width) return;
+                const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+                if(d < 100){
+                    heart.classList.add("near");
+                    const now = performance.now();
+                    const big = heart.classList.contains("on");
+                    const gap = (d < 48 ? 85 : 150) * (big ? 1.5 : 1);
+                    if(now - lastEmit > gap){
+                        lastEmit = now;
+                        spawnHeartParticle(heart.querySelector(".heart-particles"), {
+                            size: 7 + Math.random() * 7,
+                            dist: 12 + Math.random() * 18,
+                            rise: 10,
+                            dur: 800 + Math.random() * 400
+                        });
+                    }
+                } else {
+                    heart.classList.remove("near");
+                }
+            }, { passive:true });
+        }
+
+        function bindHeartEffects(heart, layer){
+            heart.addEventListener("pointerdown", function(e){
+                e.preventDefault();
+                heart.classList.toggle("on"); // 点击后变大变红，再点恢复
+                if(heart.parentNode) heart.parentNode.classList.toggle("glow", heart.classList.contains("on"));
+                heart.classList.remove("burst");
+                void heart.offsetWidth; // 重置动画
+                heart.classList.add("burst");
+                setTimeout(() => heart.classList.remove("burst"), 360);
+                const total = 18;
+                for(let i = 0; i < total; i++){
+                    spawnHeartParticle(layer, {
+                        size: 9 + Math.random() * 11,
+                        dist: 34 + Math.random() * 46,
+                        dur: 720 + Math.random() * 420,
+                        angle: (Math.PI * 2 / total) * i + Math.random() * 0.3,
+                        rise: 8
+                    });
+                }
+            });
+            heart.addEventListener("mouseenter", () => heart.classList.add("near"));
+            heart.addEventListener("mouseleave", () => heart.classList.remove("near"));
         }
 
         // ========== 甜蜜数据看板 ==========
@@ -2438,19 +2958,12 @@
 
         function restorePanelPos(){
             const saved = JSON.parse(localStorage.getItem("audioPanelPosSize")||'{}');
-            if(typeof saved.left === "number" && typeof saved.top === "number"){
-                audioPanel.style.left = saved.left + "px";
-                audioPanel.style.top = saved.top + "px";
-                audioPanel.style.right = "auto";
-            }
-            if(saved.w) audioPanel.style.width = saved.w + "px";
-            if(saved.h) audioPanel.style.height = saved.h + "px";
+            // 底部悬浮窗模式下不再恢复旧的位置/尺寸，只保留歌词条模式
             if(saved.lyricBarMode){
                 isLyricBarMode = true;
                 audioPanel.classList.add("lyric-bar-mode");
             }
             syncBarLines();
-            clampPanelIntoView();
             syncAdaptBtn();
         }
         restorePanelPos();
@@ -2460,7 +2973,7 @@
             localStorage.removeItem("audioPanelPosSize");
             audioPanel.style.left = "";
             audioPanel.style.top = "";
-            audioPanel.style.right = "20px";
+            audioPanel.style.right = "";
             audioPanel.style.width = "";
             audioPanel.style.height = "";
             audioPanel.classList.remove("lyric-bar-mode");
@@ -2477,7 +2990,7 @@
             e.stopPropagation();
             audioPanel.style.left = "";
             audioPanel.style.top = "";
-            audioPanel.style.right = "20px";
+            audioPanel.style.right = "";
             audioPanel.style.width = "";
             audioPanel.style.height = "";
             localStorage.removeItem("audioPanelPosSize");
@@ -2495,13 +3008,14 @@
             }))
         }
 
+        // 歌词条模式：支持拖动（居中弹窗模式固定居中，不可拖）
         audioPanel.addEventListener("pointerdown",(e)=>{
+            if(!isLyricBarMode) return;
             if(e.target.closest(".audio-icon") || e.target===resizeHandle) return;
             isDragMove = true;
             dragMoved = false;
             dragDownX = e.clientX;
             dragDownY = e.clientY;
-            // 先把 right 锚点换算成 left/top，避免清掉 right 后面板瞬间跳到屏幕左边
             const rect = audioPanel.getBoundingClientRect();
             dragOffsetX = e.clientX - rect.left;
             dragOffsetY = e.clientY - rect.top;
@@ -2557,7 +3071,7 @@
         lyricToggleBtn.onclick = function(){
             isLyricBarMode = !isLyricBarMode;
             // 切换瞬间完成布局变化：关掉过渡动画避免中间态错位；
-            // 清掉 inline 宽高，防止普通面板的旧尺寸覆盖歌词条默认 480×84（窄条截字问题）
+            // 清掉 inline 宽高与位置，歌词条回到"屏幕顶端居中"默认位置，弹窗模式回到屏幕正中
             const oldTransition = audioPanel.style.transition;
             audioPanel.style.transition = "none";
             if(isLyricBarMode){
@@ -2568,6 +3082,9 @@
             }
             audioPanel.style.width = "";
             audioPanel.style.height = "";
+            audioPanel.style.left = "";
+            audioPanel.style.top = "";
+            audioPanel.style.right = "";
             clampPanelIntoView();
             syncBarLines();
             void audioPanel.offsetWidth; // 强制回流，让"无过渡"先生效
