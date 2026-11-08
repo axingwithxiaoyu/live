@@ -2472,8 +2472,8 @@
             navPageBtns.forEach(function(btn){
                 btn.classList.toggle("active", btn.dataset.page === page);
             });
-            // 切换后回到顶部，导航随之收起（继续下滑会再次出现）
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            // 切换后直接瞬移回顶部（不用平滑滚动，避免从底部一路滚到顶部晃眼睛），导航随之收起
+            window.scrollTo({ top: 0, behavior: "auto" });
             // 页面内容不足一屏时无法滚动，导航保持可见，避免无法再切换
             requestAnimationFrame(syncDockNav);
         }
