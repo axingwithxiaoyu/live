@@ -3436,12 +3436,9 @@
         }
 
         function restorePanelPos(){
-            const saved = JSON.parse(localStorage.getItem("audioPanelPosSize")||'{}');
-            // 底部悬浮窗模式下不再恢复旧的位置/尺寸，只保留歌词条模式
-            if(saved.lyricBarMode){
-                isLyricBarMode = true;
-                audioPanel.classList.add("lyric-bar-mode");
-            }
+            // 刷新后统一以「封面卡片」弹窗模式打开，不再恢复上次的歌词条模式
+            isLyricBarMode = false;
+            audioPanel.classList.remove("lyric-bar-mode");
             syncBarLines();
             syncAdaptBtn();
         }
@@ -3614,6 +3611,169 @@
             img.alt = (song && song.showName) || "";
             box.appendChild(img);
         }
+
+        // ===== 读取 MP3 内置 ID3 标签：歌名 / 歌手 / 封面 =====
+        // 原理：ID3v2 标签写在文件开头，只请求前 768KB 解析，不整首下载；解析结果按链接缓存
+        const songTagCache = new Map(); // 歌曲链接 -> {title, artist, cover} 或 false（解析失败）
+        function id3Syncsafe(bytes, off){
+            return (bytes[off] & 0x7f) * 0x200000 + (bytes[off + 1] & 0x7f) * 0x4000 +
+                   (bytes[off + 2] & 0x7f) * 0x80 + (bytes[off + 3] & 0x7f);
+        }
+        function id3Uint32(bytes, off){
+            return bytes[off] * 0x1000000 + bytes[off + 1] * 0x10000 + bytes[off + 2] * 0x100 + bytes[off + 3];
+        }
+        function decodeId3Text(bytes, start, length){
+            if(length <= 0) return "";
+            const enc = bytes[start];
+            const data = bytes.subarray(start + 1, start + length);
+            try{
+                const label = enc === 1 ? "utf-16" : (enc === 2 ? "utf-16be" : (enc === 3 ? "utf-8" : "iso-8859-1"));
+                return new TextDecoder(label).decode(data).replace(/\0/g, "").trim();
+            }catch(e){
+                return "";
+            }
+        }
+        function decodeId3Picture(bytes, start, length){
+            const end = start + length;
+            let p = start + 1; // 跳过文本编码字节
+            // MIME 类型（以 0x00 结尾，如 image/jpeg）
+            let mime = "";
+            while(p < end && bytes[p] !== 0){ mime += String.fromCharCode(bytes[p]); p++; }
+            p += 2; // 跳过结束符 + 图片类型
+            // 描述文字（按编码结尾）
+            if(bytes[start] === 1 || bytes[start] === 2){
+                while(p + 1 < end && !(bytes[p] === 0 && bytes[p + 1] === 0)) p += 2;
+                p += 2;
+            }else{
+                while(p < end && bytes[p] !== 0) p++;
+                p++;
+            }
+            const dataLen = end - p;
+            if(dataLen <= 0) return null;
+            const type = (mime && mime.indexOf("image") === 0) ? mime : "image/jpeg";
+            return URL.createObjectURL(new Blob([bytes.subarray(p, end)], { type: type }));
+        }
+        // 解析 USLT（非同步歌词）帧：编码字节 + 语言(3字节) + 内容描述 + 歌词正文
+        function decodeId3Lyrics(bytes, start, length){
+            const end = start + length;
+            if(length <= 6) return "";
+            const enc = bytes[start];
+            let p = start + 4;
+            if(enc === 1 || enc === 2){
+                while(p + 1 < end && !(bytes[p] === 0 && bytes[p + 1] === 0)) p += 2;
+                p += 2;
+            }else{
+                while(p < end && bytes[p] !== 0) p++;
+                p++;
+            }
+            if(p >= end) return "";
+            try{
+                const label = enc === 1 ? "utf-16" : (enc === 2 ? "utf-16be" : (enc === 3 ? "utf-8" : "iso-8859-1"));
+                return new TextDecoder(label).decode(bytes.subarray(p, end)).replace(/\0/g, "").trim();
+            }catch(e){
+                return "";
+            }
+        }
+        function parseId3Tags(buf){
+            const bytes = new Uint8Array(buf);
+            if(bytes.length < 10) return null;
+            if(bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return null; // "ID3"
+            const ver = bytes[3];
+            if(ver < 3) return null; // 仅支持 ID3v2.3 / v2.4
+            const flags = bytes[5];
+            if(flags & 0x80) return null; // 整标签反同步，暂不处理
+            const tagEnd = Math.min(bytes.length, 10 + id3Syncsafe(bytes, 6));
+            let pos = 10;
+            if(flags & 0x40){ // 扩展头
+                pos += ver === 3 ? 4 + id3Uint32(bytes, 10) : id3Syncsafe(bytes, 10);
+            }
+            const out = { title: "", artist: "", cover: null, lyrics: "" };
+            while(pos + 10 <= tagEnd){
+                const id = String.fromCharCode(bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]);
+                if(!/^[A-Z0-9]{4}$/.test(id)) break;
+                const size = ver === 4 ? id3Syncsafe(bytes, pos + 4) : id3Uint32(bytes, pos + 4);
+                const start = pos + 10;
+                if(size <= 0 || start + size > tagEnd) break;
+                if(id === "TIT2" && !out.title) out.title = decodeId3Text(bytes, start, size);
+                else if(id === "TPE1" && !out.artist) out.artist = decodeId3Text(bytes, start, size);
+                else if(id === "APIC" && !out.cover) out.cover = decodeId3Picture(bytes, start, size);
+                else if(id === "USLT" && !out.lyrics) out.lyrics = decodeId3Lyrics(bytes, start, size);
+                if(out.title && out.artist && out.cover && out.lyrics) break;
+                pos = start + size;
+            }
+            return (out.title || out.artist || out.cover || out.lyrics) ? out : null;
+        }
+        function applyId3Tags(song, tags){
+            if(!tags) return;
+            let changed = false;
+            if(!song.artist && tags.artist){ song.artist = tags.artist; changed = true; }
+            if(!song.cover && tags.cover){ song.cover = tags.cover; changed = true; }
+            // 上传的歌文件名通常是 xxx.mp3，用标签里的真实歌名替换
+            const asFile = /\.(mp3|m4a|wav|aac|flac|ogg)$/i.test(song.showName || "");
+            if(tags.title && (asFile || !song.showName)){ song.showName = tags.title; changed = true; }
+            if(tags.lyrics) song.usltLyrics = tags.lyrics;
+            // 没有 .lrc 时用内嵌纯文本歌词兜底
+            useEmbeddedLyric(song, tags.lyrics);
+            if(!changed) return;
+            if(getSongs()[currentSongIndex] === song) updateNowPlayingInfo();
+            if(plistSection.classList.contains("show")) renderPlist();
+        }
+        function loadSongTags(song, src){
+            if(!song || !src) return;
+            if(song.artist && song.cover) return; // 已配置完整，无需解析
+            if(songTagCache.has(src)){
+                applyId3Tags(song, songTagCache.get(src));
+                return;
+            }
+            songTagCache.set(src, false); // 先占位，避免重复请求
+            const rangeEnd = 786431; // 768KB，足够覆盖 ID3 标签与封面
+            fetch(src, { headers: { Range: "bytes=0-" + rangeEnd } })
+                .then(function(res){
+                    if(!res.ok) throw new Error("status " + res.status);
+                    // 服务器不支持 Range（返回整文件）且体积较大时放弃，避免浪费流量
+                    const len = Number(res.headers.get("content-length") || 0);
+                    if(res.status === 200 && len > 4 * 1024 * 1024) throw new Error("range unsupported");
+                    return res.arrayBuffer();
+                })
+                .then(function(buf){
+                    const tags = parseId3Tags(buf);
+                    songTagCache.set(src, tags || false);
+                    if(tags) applyId3Tags(song, tags);
+                })
+                .catch(function(){
+                    // 跨域限制 / 无标签 / 解析异常：保持默认封面与无歌手
+                    songTagCache.set(src, false);
+                });
+        }
+        // ===== 内嵌纯文本歌词兜底 =====
+        // USLT 本身没有时间轴：这里按整曲时长把每行平均分布，歌词条随播放进度逐行推进；
+        // 若歌词文本里自带 [mm:ss] 标签，则直接按真实时间轴解析
+        function hasLrcSource(song){
+            return !!song && (!!song.lrcText || !!song.lrcPath || !!song.hasLrc);
+        }
+        function buildStaticLyrics(text, duration){
+            const lines = String(text || "").split(/\r?\n/).map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+            if(!lines.length) return [];
+            const d = (isFinite(duration) && duration > 0) ? duration : 0;
+            const step = d > 0 ? d / lines.length : 0;
+            return lines.map(function(txt, i){ return { time: i * step, text: txt }; });
+        }
+        function useEmbeddedLyric(song, text){
+            if(!song || !text) return;
+            function apply(){
+                if(getSongs()[currentSongIndex] !== song) return; // 已切歌，放弃
+                if(hasLrcSource(song)) return; // 有 .lrc 就不覆盖
+                let lines = parseLrc(text);
+                if(!lines.length) lines = buildStaticLyrics(text, music.duration);
+                if(!lines.length) return;
+                lyricLines = lines;
+                lastLyricIdx = -1;
+                updateSingleLyric(music.currentTime);
+            }
+            // readyState>=1 表示已经拿到这首新歌的元数据，否则等加载完成再算时间轴
+            if(music.readyState >= 1 && isFinite(music.duration) && music.duration > 0) apply();
+            else music.addEventListener("loadedmetadata", apply, { once: true });
+        }
         function tintProgress(){
             const max = parseFloat(progressBar.max) || 0;
             const val = parseFloat(progressBar.value) || 0;
@@ -3637,7 +3797,8 @@
             updateSingleLyric(music.currentTime);
             syncProgress();
         }
-        function refreshNowPlaying(){
+        // 只刷新歌名/歌手/封面（ID3 标签异步解析回来后调用，不重置播放进度）
+        function updateNowPlayingInfo(){
             const song = getSongs()[currentSongIndex];
             const nm = (song && song.showName) || "歌曲";
             const artist = songArtist(song);
@@ -3645,6 +3806,9 @@
             npArtist.textContent = artist;
             npArtist.style.display = artist ? "" : "none";
             fillCover(npCover, song || { showName: nm });
+        }
+        function refreshNowPlaying(){
+            updateNowPlayingInfo();
             progressBar.max = 0;
             progressBar.value = 0;
             curTimeEl.textContent = "0:00";
@@ -3742,12 +3906,14 @@
                 if(song.lrcText){ loadLyricText(song.lrcText); }
                 else{ loadLyric(song.hasLrc ? ("api/songs?lrc=" + song.id) : ""); }
                 refreshNowPlaying();
+                loadSongTags(song, currentMusicSrc);
                 return;
             }
             currentMusicSrc = MUSIC_CDN_BASE ? (MUSIC_CDN_BASE + "/" + song.filePath) : ("music/" + song.filePath);
             music.src = currentMusicSrc;
             loadLyric(song.lrcPath);
             refreshNowPlaying();
+            loadSongTags(song, currentMusicSrc);
         }
         loadSong(currentSongIndex);
 
