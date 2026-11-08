@@ -2309,8 +2309,10 @@
 
         function syncDockNav(){
             if(!dockNav) return;
-            const canScroll = document.documentElement.scrollHeight > window.innerHeight + 10;
-            dockNav.classList.toggle("show", window.scrollY > 90 || !canScroll);
+            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            // 短页面可滚动距离不足 90px 时按比例降低阈值，否则永远滑不到 90px，导航就弹不出来
+            const threshold = maxScroll > 10 ? Math.min(90, Math.max(10, maxScroll * 0.4)) : 0;
+            dockNav.classList.toggle("show", maxScroll <= 10 || window.scrollY > threshold);
         }
         window.addEventListener("scroll", syncDockNav, { passive: true });
         window.addEventListener("resize", syncDockNav);
