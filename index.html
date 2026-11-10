@@ -2186,6 +2186,30 @@
             { name:"中秋节", emoji:"🥮", m:8, d:15 }
         ];
 
+        // 照片加载失败时的柔和占位图（内联 SVG，不依赖任何外部服务）
+        const PHOTO_FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">' +
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+            '<stop offset="0" stop-color="#ffe6f0"/><stop offset="1" stop-color="#ffd2e3"/></linearGradient></defs>' +
+            '<rect width="400" height="300" fill="url(#g)"/>' +
+            '<text x="200" y="150" font-size="52" text-anchor="middle">💕</text>' +
+            '<text x="200" y="196" font-size="15" fill="#c98aa4" text-anchor="middle">照片加载失败</text>' +
+            '</svg>');
+
+        // 加载失败容错：GitHub Pages 备站先换 jsDelivr 镜像再试一次，仍失败才显示占位图
+        function watchImgLoad(el){
+            el.onerror = function(){
+                const src = this.getAttribute("src") || "";
+                if(!this.dataset.mirrorTried && src.indexOf("img/") === 0 && location.hostname.indexOf("github.io") >= 0){
+                    this.dataset.mirrorTried = "1";
+                    this.src = "https://cdn.jsdelivr.net/gh/axingwithxiaoyu/live@main/" + src;
+                    return;
+                }
+                this.onerror = null;
+                this.src = PHOTO_FALLBACK;
+            };
+        }
+
         const photoData = [
             {src:"img/1.jpg", tags:["我的世界"]},
             {src:"img/2.jpg", tags:["我的世界"]},
@@ -3033,7 +3057,7 @@
                 im.style.display = "";
                 const p = all[sweetIdxs[k]];
                 im.src = p.src;
-                im.onerror = function(){ this.src = "https://picsum.photos/id/237/400/300"; };
+                watchImgLoad(im);
                 im.onclick = ()=>{ lightImg.src = p.src; lightbox.classList.add("show"); };
             });
         }
@@ -3386,10 +3410,11 @@
                 const img = document.createElement('img');
                 img.src = photo.src;
                 img.alt = "合照";
+                // 懒加载：滚动到附近才请求，弱网下不会一次性卡住整面墙
+                img.loading = "lazy";
+                img.decoding = "async";
                 //图片加载失败容错
-                img.onerror = function(){
-                    this.src = "https://picsum.photos/id/237/400/300";
-                }
+                watchImgLoad(img);
                 itemDiv.append(t1,t2,b1,b2,img);
                 galleryBox.appendChild(itemDiv);
                 img.onclick = ()=>{
