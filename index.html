@@ -3104,23 +3104,24 @@
                     const url = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat + "&longitude=" + c.lon
                         + "&current=temperature_2m,weather_code,relative_humidity_2m"
                         + "&hourly=temperature_2m,weather_code"
-                        + "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1";
+                        + "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2";
                     const d = await (await fetch(url)).json();
                     if(!d || !d.current) continue;
                     const info = wxInfo(d.current.weather_code);
                     const tmax = d.daily && d.daily.temperature_2m_max ? Math.round(d.daily.temperature_2m_max[0]) : null;
                     const tmin = d.daily && d.daily.temperature_2m_min ? Math.round(d.daily.temperature_2m_min[0]) : null;
                     const range = (tmax !== null && tmin !== null) ? (tmin + "° ~ " + tmax + "°") : "";
-                    // 逐小时预报：取 现在 / +3h / +6h / +9h 四个时段
+                    // 逐小时预报：从当前小时开始，每小时依次取 5 个时段
                     let hoursHtml = "";
                     if(d.hourly && d.hourly.time && d.hourly.temperature_2m){
                         const nowHour = new Date().getHours();
                         const slots = [];
-                        for(let k = 0; k <= 9; k += 3){
+                        for(let k = 0; k < 5; k++){
                             const h = nowHour + k;
-                            if(h < 24 && h < d.hourly.time.length && d.hourly.temperature_2m[h] != null){
+                            if(h < d.hourly.time.length && d.hourly.temperature_2m[h] != null){
+                                // 超过 23 时自动接到明天的下一个小时
                                 slots.push({
-                                    label: k === 0 ? "现在" : (h + "时"),
+                                    label: k === 0 ? "现在" : ((h % 24) + "时"),
                                     icon: wxInfo(d.hourly.weather_code[h]).icon,
                                     temp: Math.round(d.hourly.temperature_2m[h]) + "°"
                                 });
